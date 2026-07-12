@@ -24,10 +24,31 @@
       <div class="browser" id="browser"></div>
     </section>
 
-    <!-- Columna centro: contenido del programa -->
+    <!-- Columna centro: editor de texto -->
     <section class="col col-content">
-      <div class="col-header" id="contentHeader">Contenido</div>
-      <pre class="content-view" id="contentView"><span class="placeholder">Toca un programa de la izquierda para ver su contenido.</span></pre>
+      <div class="editor-toolbar">
+        <span class="editor-filename" id="editorFilename">Sin archivo</span>
+        <div class="editor-actions">
+          <button class="tbtn" id="btnNew">＋ Nuevo</button>
+          <button class="tbtn" id="btnFind">🔍</button>
+          <button class="tbtn" id="btnSave" disabled>💾 Guardar</button>
+          <button class="tbtn danger" id="btnDeleteFile" disabled>🗑</button>
+        </div>
+      </div>
+
+      <div class="find-bar" id="findBar">
+        <input type="text" id="findInput" placeholder="Buscar" autocomplete="off" spellcheck="false">
+        <input type="text" id="replaceInput" placeholder="Reemplazar" autocomplete="off" spellcheck="false">
+        <span class="find-count" id="findCount"></span>
+        <button class="tbtn" id="btnFindPrev">◀</button>
+        <button class="tbtn" id="btnFindNext">▶</button>
+        <button class="tbtn" id="btnReplace">Reemplazar</button>
+        <button class="tbtn" id="btnReplaceAll">Todo</button>
+        <button class="tbtn" id="btnFindClose">✕</button>
+      </div>
+
+      <textarea class="editor" id="editor" spellcheck="false"
+        placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
     </section>
 
     <!-- Columna derecha: maquina + envio + alarma -->
@@ -40,7 +61,10 @@
       </div>
 
       <div class="section-label">Máquina</div>
-      <div class="machine-list" id="machineList"></div>
+      <button class="machine-select-btn" id="machineSelectBtn">
+        <span id="machineSelectLabel">Seleccionar máquina</span>
+        <span class="chev">▾</span>
+      </button>
 
       <div class="selected-file-card">
         <div class="section-label">Archivo seleccionado</div>
@@ -61,14 +85,98 @@
 
   </main>
 
-  <!-- Modal de confirmacion de envio -->
+  <!-- Modal: lista/administracion de maquinas -->
+  <div id="machineModal" class="modal-overlay">
+    <div class="modal-box wide">
+      <h2>Máquinas</h2>
+      <div class="machine-modal-list" id="machineModalList"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnCloseMachineModal">Cerrar</button>
+        <button class="btn btn-primary" id="btnAddMachine">＋ Agregar máquina</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editor de perfil de maquina -->
+  <div id="machineEditModal" class="modal-overlay">
+    <div class="modal-box">
+      <h2 id="machineEditTitle">Nueva máquina</h2>
+      <div class="form-grid">
+        <label>Nombre
+          <input type="text" id="mfName" autocomplete="off">
+        </label>
+        <label>Baudrate
+          <select id="mfBaud">
+            <option>300</option><option>600</option><option>1200</option>
+            <option>2400</option><option>4800</option><option>9600</option>
+            <option>19200</option><option>38400</option><option>57600</option>
+            <option>115200</option>
+          </select>
+        </label>
+        <label>Bits de datos
+          <select id="mfBytesize">
+            <option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option>
+          </select>
+        </label>
+        <label>Paridad
+          <select id="mfParity">
+            <option value="N">Ninguna (N)</option>
+            <option value="E">Par (E)</option>
+            <option value="O">Impar (O)</option>
+            <option value="M">Mark (M)</option>
+            <option value="S">Space (S)</option>
+          </select>
+        </label>
+        <label>Bits de stop
+          <select id="mfStop">
+            <option value="1">1</option><option value="2">2</option>
+          </select>
+        </label>
+        <label>Control de flujo
+          <select id="mfFlow">
+            <option value="xonxoff">XON/XOFF (software)</option>
+            <option value="rtscts">RTS/CTS (hardware)</option>
+          </select>
+        </label>
+        <label>Terminador de línea
+          <select id="mfTerm">
+            <option value="CR">CR (\r)</option>
+            <option value="CRLF">CR+LF (\r\n)</option>
+            <option value="LF">LF (\n)</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-error" id="mfError"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnCancelMachineEdit">Cancelar</button>
+        <button class="btn btn-primary" id="btnSaveMachineEdit">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: nuevo programa -->
+  <div id="newFileModal" class="modal-overlay">
+    <div class="modal-box">
+      <h2>Nuevo programa</h2>
+      <p class="modal-sub" id="newFileDirHint"></p>
+      <input type="text" id="newFileName" placeholder="nombre.nc" autocomplete="off" spellcheck="false">
+      <div class="form-error" id="newFileError"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnCancelNewFile">Cancelar</button>
+        <button class="btn btn-primary" id="btnCreateNewFile">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal generico de confirmacion -->
   <div id="confirmModal" class="modal-overlay">
     <div class="modal-box">
-      <h2>Confirmar envío</h2>
+      <h2 id="confirmTitle">Confirmar</h2>
       <p id="confirmText"></p>
       <div class="modal-buttons">
-        <button class="btn btn-secondary" id="btnCancelSend">Cancelar</button>
-        <button class="btn btn-primary" id="btnConfirmSend">Enviar</button>
+        <button class="btn btn-secondary" id="btnConfirmCancel">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmOk">Aceptar</button>
       </div>
     </div>
   </div>

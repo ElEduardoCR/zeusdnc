@@ -115,6 +115,64 @@ def read_file(rel_path):
     }
 
 
+def _valid_filename(name):
+    name = (name or "").strip()
+    if not name or name in (".", ".."):
+        return False
+    if name.startswith("."):
+        return False
+    if "/" in name or "\\" in name:
+        return False
+    return True
+
+
+def save_file(rel_path, content):
+    """Guarda contenido (str) en un archivo existente o nuevo dentro de la
+    carpeta. Devuelve (True, None) o (False, error)."""
+    target = resolve_path(rel_path)
+    if target is None or os.path.isdir(target):
+        return False, "Ruta invalida"
+    try:
+        # latin-1 mapea 1 a 1 cada byte; 'replace' evita fallar si el editor
+        # trajo algun caracter fuera de ese rango.
+        with open(target, "wb") as f:
+            f.write(content.encode("latin-1", errors="replace"))
+    except OSError as e:
+        return False, str(e)
+    return True, None
+
+
+def create_file(dir_rel, name):
+    """Crea un archivo vacio 'name' dentro de la subcarpeta 'dir_rel'.
+    Devuelve (ruta_relativa, None) o (None, error)."""
+    if not _valid_filename(name):
+        return None, "Nombre de archivo invalido"
+    dir_abs = resolve_path(dir_rel)
+    if dir_abs is None or not os.path.isdir(dir_abs):
+        return None, "Carpeta invalida"
+    target = os.path.join(dir_abs, name.strip())
+    if os.path.exists(target):
+        return None, "Ya existe un archivo con ese nombre"
+    try:
+        with open(target, "wb") as f:
+            f.write(b"")
+    except OSError as e:
+        return None, str(e)
+    base = os.path.realpath(WATCH_DIR)
+    return _rel(base, target), None
+
+
+def delete_file(rel_path):
+    target = resolve_path(rel_path)
+    if target is None or not os.path.isfile(target):
+        return False, "Archivo no encontrado"
+    try:
+        os.remove(target)
+    except OSError as e:
+        return False, str(e)
+    return True, None
+
+
 class _Handler(FileSystemEventHandler):
     def on_any_event(self, event):
         state.bump_files_version()

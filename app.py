@@ -10,7 +10,7 @@ from flask import Flask, jsonify, render_template, request
 import folder_monitor
 import serial_transfer
 import usb_monitor
-from machines import get_machine, load_machines
+from machines import delete_machine, get_machine, load_machines, save_machine
 from state import state
 
 app = Flask(__name__)
@@ -53,9 +53,58 @@ def api_file():
     return jsonify(data)
 
 
+@app.route("/api/file/save", methods=["POST"])
+def api_file_save():
+    data = request.get_json(force=True, silent=True) or {}
+    ok, err = folder_monitor.save_file(data.get("path"), data.get("content", ""))
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/file/new", methods=["POST"])
+def api_file_new():
+    data = request.get_json(force=True, silent=True) or {}
+    rel, err = folder_monitor.create_file(data.get("dir", ""), data.get("name", ""))
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "path": rel})
+
+
+@app.route("/api/file/delete", methods=["POST"])
+def api_file_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    ok, err = folder_monitor.delete_file(data.get("path"))
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True})
+
+
 @app.route("/api/machines")
 def api_machines():
     return jsonify(load_machines())
+
+
+@app.route("/api/machine/save", methods=["POST"])
+def api_machine_save():
+    data = request.get_json(force=True, silent=True) or {}
+    machine, err = save_machine(data)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "machine": machine})
+
+
+@app.route("/api/machine/delete", methods=["POST"])
+def api_machine_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    machine_id = data.get("id")
+    ok, err = delete_machine(machine_id)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    # Si la maquina borrada era la activa, se limpia la seleccion.
+    if state.snapshot()["active_machine_id"] == machine_id:
+        state.clear_machine()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/machine/select", methods=["POST"])

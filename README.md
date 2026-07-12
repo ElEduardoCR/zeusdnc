@@ -108,12 +108,19 @@ adaptador para usarse:
   incluyendo **subcarpetas** (tocas una carpeta para entrar y usas el
   breadcrumb superior para volver). Se actualiza sola cuando se copian,
   quitan o modifican archivos desde Windows/Mac.
-- **Centro — Contenido:** al tocar un programa se muestra su contenido
-  (solo lectura), útil para verificar el archivo antes de enviarlo.
-- **Derecha — Envío:** selección de máquina (disponible siempre, aunque
-  no haya cable), una **alarma** que avisa en rojo cuando el cable RS232
-  no está conectado (y en verde con el puerto cuando sí lo está), el
-  botón **ENVIAR** y la barra de progreso/resultado.
+- **Centro — Editor:** al tocar un programa se abre en un editor de texto
+  sencillo. Permite editar el G-code, **Guardar**, crear un programa
+  **Nuevo**, **Eliminar** el archivo y una barra de **Buscar / Reemplazar**
+  (buscar siguiente/anterior, reemplazar uno o todos). Los archivos muy
+  grandes se abren en solo lectura. No se puede enviar mientras haya
+  cambios sin guardar (primero **Guardar**).
+- **Derecha — Envío:** un **selector de máquina** (botón que abre un modal
+  con todas las máquinas). En ese modal se puede **seleccionar**, **✎
+  editar**, **🗑 eliminar** y **＋ agregar** máquinas — los cambios se
+  guardan en `config/machines.json` sin tocar código. También muestra una
+  **alarma** en rojo cuando el cable RS232 no está conectado (verde con el
+  puerto cuando sí lo está), el botón **ENVIAR** y la barra de
+  progreso/resultado.
 
 ## 6. Probar todo el flujo
 
