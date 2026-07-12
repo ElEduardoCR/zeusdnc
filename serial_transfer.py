@@ -5,14 +5,11 @@ drip-feed sincronizado con el ciclo de maquinado: se abre el puerto, se
 manda el archivo completo respetando el control de flujo del perfil, y se
 cierra.
 """
-import os
 import threading
 
 import serial
 
 from state import state
-
-WATCH_DIR = "/home/eduardo/cnc-programs"
 
 BYTESIZE_MAP = {
     5: serial.FIVEBITS,
@@ -55,22 +52,25 @@ def _prepare_payload(filepath, terminator):
     return body.encode("latin-1")
 
 
-def start_transfer(device_path, machine_profile, filename):
-    """Lanza la transferencia en un hilo aparte. No bloquea al llamador."""
+def start_transfer(device_path, machine_profile, filepath, display_name):
+    """Lanza la transferencia en un hilo aparte. No bloquea al llamador.
+
+    filepath es la ruta absoluta ya validada dentro de la carpeta
+    compartida; display_name es el nombre a mostrar en la interfaz.
+    """
     if not _transfer_lock.acquire(blocking=False):
         return False, "Ya hay una transferencia en curso"
 
     thread = threading.Thread(
         target=_run_transfer,
-        args=(device_path, machine_profile, filename),
+        args=(device_path, machine_profile, filepath, display_name),
         daemon=True,
     )
     thread.start()
     return True, None
 
 
-def _run_transfer(device_path, profile, filename):
-    filepath = os.path.join(WATCH_DIR, filename)
+def _run_transfer(device_path, profile, filepath, display_name):
     machine_name = profile.get("name", profile.get("id"))
     try:
         terminator = TERMINATOR_MAP[profile["line_terminator"]]
@@ -79,7 +79,7 @@ def _run_transfer(device_path, profile, filename):
 
         state.update_transfer(
             status="sending",
-            filename=filename,
+            filename=display_name,
             machine=machine_name,
             bytes_sent=0,
             total_bytes=total,

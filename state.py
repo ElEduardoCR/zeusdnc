@@ -18,52 +18,42 @@ _EMPTY_TRANSFER = {
 class AppState:
     def __init__(self):
         self._lock = threading.Lock()
-        self.usb_device = None        # p.ej. "/dev/ttyUSB0" o None si no hay adaptador
-        self.awaiting_machine = False  # True: hay adaptador pero aun no se eligio maquina
-        self.active_machine_id = None
-        self.files = []
+        self.usb_device = None          # p.ej. "/dev/ttyUSB0" o None si no hay cable
+        self.active_machine_id = None   # se puede elegir aunque no haya cable
+        self.files_version = 0          # se incrementa en cada cambio de la carpeta
         self.transfer = dict(_EMPTY_TRANSFER)
 
     def snapshot(self):
         with self._lock:
             return {
                 "usb_device": self.usb_device,
-                "awaiting_machine": self.awaiting_machine,
                 "active_machine_id": self.active_machine_id,
-                "files": list(self.files),
+                "files_version": self.files_version,
                 "transfer": dict(self.transfer),
             }
 
     def on_usb_add(self, device_path):
+        # Conectar el cable no cambia la maquina elegida: el usuario pudo
+        # haberla seleccionado antes de conectar.
         with self._lock:
             self.usb_device = device_path
-            self.awaiting_machine = True
-            self.active_machine_id = None
 
     def on_usb_remove(self, device_path):
         with self._lock:
             if self.usb_device == device_path:
                 self.usb_device = None
-                self.awaiting_machine = False
-                self.active_machine_id = None
 
     def select_machine(self, machine_id):
         with self._lock:
-            if not self.usb_device:
-                return False
             self.active_machine_id = machine_id
-            self.awaiting_machine = False
-            return True
 
     def clear_machine(self):
         with self._lock:
-            if self.usb_device:
-                self.awaiting_machine = True
-                self.active_machine_id = None
+            self.active_machine_id = None
 
-    def set_files(self, files):
+    def bump_files_version(self):
         with self._lock:
-            self.files = files
+            self.files_version += 1
 
     def update_transfer(self, **kwargs):
         with self._lock:

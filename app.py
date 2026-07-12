@@ -1,7 +1,10 @@
-"""Backend Flask del sistema DNC: sirve la interfaz tactil y expone las
-rutas para listar maquinas/archivos, elegir maquina activa, enviar un
-archivo por serial y consultar el progreso de la transferencia.
+"""Backend Flask del sistema DNC: sirve la interfaz tactil de 3 columnas y
+expone las rutas para navegar la carpeta de programas (con subcarpetas),
+ver el contenido de un programa, elegir maquina activa, enviar un archivo
+por serial y consultar el progreso.
 """
+import os
+
 from flask import Flask, jsonify, render_template, request
 
 import folder_monitor
@@ -29,12 +32,25 @@ def api_state():
     return jsonify({
         "usb_connected": snap["usb_device"] is not None,
         "usb_device": snap["usb_device"],
-        "awaiting_machine": snap["awaiting_machine"],
         "machines": machines,
         "active_machine": active,
-        "files": snap["files"],
+        "active_machine_id": snap["active_machine_id"],
+        "files_version": snap["files_version"],
         "transfer": snap["transfer"],
     })
+
+
+@app.route("/api/files")
+def api_files():
+    return jsonify(folder_monitor.list_dir(request.args.get("path", "")))
+
+
+@app.route("/api/file")
+def api_file():
+    data = folder_monitor.read_file(request.args.get("path", ""))
+    if data is None:
+        return jsonify({"ok": False, "error": "Archivo no encontrado"}), 404
+    return jsonify(data)
 
 
 @app.route("/api/machines")
@@ -48,9 +64,7 @@ def api_machine_select():
     machine_id = data.get("id")
     if not machine_id or not get_machine(machine_id):
         return jsonify({"ok": False, "error": "Maquina invalida"}), 400
-
-    if not state.select_machine(machine_id):
-        return jsonify({"ok": False, "error": "No hay adaptador USB conectado"}), 409
+    state.select_machine(machine_id)
     return jsonify({"ok": True})
 
 
@@ -63,15 +77,17 @@ def api_machine_clear():
 @app.route("/api/send", methods=["POST"])
 def api_send():
     snap = state.snapshot()
-    if not snap["usb_device"] or not snap["active_machine_id"]:
+    if not snap["usb_device"]:
+        return jsonify({"ok": False, "error": "Cable RS232 no conectado"}), 409
+    if not snap["active_machine_id"]:
         return jsonify({"ok": False, "error": "Selecciona una maquina antes de enviar"}), 409
     if snap["transfer"]["status"] == "sending":
         return jsonify({"ok": False, "error": "Ya hay una transferencia en curso"}), 409
 
     data = request.get_json(force=True, silent=True) or {}
-    filename = data.get("filename")
-    valid_names = {f["name"] for f in snap["files"]}
-    if not filename or filename not in valid_names:
+    rel_path = data.get("path")
+    abs_path = folder_monitor.resolve_path(rel_path) if rel_path else None
+    if not abs_path or not os.path.isfile(abs_path):
         return jsonify({"ok": False, "error": "Archivo invalido"}), 400
 
     profile = get_machine(snap["active_machine_id"])
@@ -79,7 +95,9 @@ def api_send():
         return jsonify({"ok": False, "error": "Perfil de maquina no encontrado"}), 500
 
     state.reset_transfer()
-    ok, err = serial_transfer.start_transfer(snap["usb_device"], profile, filename)
+    ok, err = serial_transfer.start_transfer(
+        snap["usb_device"], profile, abs_path, os.path.basename(abs_path)
+    )
     if not ok:
         return jsonify({"ok": False, "error": err}), 409
     return jsonify({"ok": True})

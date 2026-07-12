@@ -99,23 +99,40 @@ completa sobre esa URL. Si el binario en tu instalación se llama
 `chromium` en lugar de `chromium-browser`, edita esa línea en
 `autostart/kiosk.sh`.
 
-## 5. Probar todo el flujo
+## 5. La interfaz (3 columnas)
+
+La pantalla se divide en tres columnas y **no** obliga a conectar el
+adaptador para usarse:
+
+- **Izquierda — Programas:** explorador navegable de `cnc-programs`,
+  incluyendo **subcarpetas** (tocas una carpeta para entrar y usas el
+  breadcrumb superior para volver). Se actualiza sola cuando se copian,
+  quitan o modifican archivos desde Windows/Mac.
+- **Centro — Contenido:** al tocar un programa se muestra su contenido
+  (solo lectura), útil para verificar el archivo antes de enviarlo.
+- **Derecha — Envío:** selección de máquina (disponible siempre, aunque
+  no haya cable), una **alarma** que avisa en rojo cuando el cable RS232
+  no está conectado (y en verde con el puerto cuando sí lo está), el
+  botón **ENVIAR** y la barra de progreso/resultado.
+
+## 6. Probar todo el flujo
 
 1. Reinicia la Pi (`sudo reboot`) o al menos la sesión de escritorio.
-2. Debe aparecer Chromium en kiosko mostrando "Conecta el adaptador RS232".
-3. Copia un programa a la carpeta compartida `cnc-programs` desde
-   Windows/Mac (vía el share Samba) y confirma que aparece solo en la
-   lista sin recargar la página.
-4. Conecta el adaptador USB-RS232: la pantalla debe pasar de inmediato a
-   pedir la máquina, mostrando los perfiles configurados como botones
-   grandes.
-5. Toca un perfil (p. ej. Fanuc): la pantalla pasa a la lista de
-   archivos.
-6. Selecciona un archivo, toca **ENVIAR**, confirma en el modal — recién
-   ahí se transmite. Debe verse la barra de progreso y al final un
-   mensaje de éxito o error.
-7. Desconecta el adaptador USB: la interfaz debe volver a "Conecta el
-   adaptador RS232" y olvidar la máquina activa.
+2. Debe aparecer Chromium en kiosko con las 3 columnas y la alarma roja
+   "Cable RS232 no conectado".
+3. Copia un programa (o una subcarpeta con programas) a la carpeta
+   compartida `cnc-programs` desde Windows/Mac (vía el share Samba) y
+   confirma que aparece solo en la columna izquierda sin recargar.
+4. Toca un programa: su contenido aparece en la columna central.
+5. Toca una máquina (p. ej. Fanuc) en la columna derecha. Puedes hacerlo
+   aunque el cable no esté conectado.
+6. Conecta el adaptador USB-RS232: la alarma pasa a verde y muestra el
+   puerto detectado (p. ej. `/dev/ttyUSB0`); el botón **ENVIAR** se
+   habilita.
+7. Toca **ENVIAR** y confirma en el modal — recién ahí se transmite. Debe
+   verse la barra de progreso y al final un mensaje de éxito o error.
+8. Desconecta el adaptador USB: la alarma vuelve a rojo y **ENVIAR** se
+   deshabilita, pero el programa y la máquina elegidos se conservan.
 
 Para pruebas de escritorio sin hardware serial real, se puede usar un par
 de pseudo-terminales (`socat -d -d pty,raw,echo=0 pty,raw,echo=0`) para
@@ -125,12 +142,15 @@ funcionan antes de conectar una máquina real.
 ## Notas de diseño
 
 - El adaptador USB-RS232 nunca se hardcodea a una ruta: se detecta por
-  eventos udev (`usb_monitor.py`) cada vez que se conecta o desconecta,
-  y cada conexión nueva vuelve a pedir la máquina (aunque sea el mismo
-  adaptador).
+  eventos udev (`usb_monitor.py`) cada vez que se conecta o desconecta.
+  La máquina se elige de forma independiente y se conserva aunque el
+  cable se conecte o desconecte.
 - El envío es siempre una acción manual explícita del usuario
   (botón **ENVIAR** + confirmación); la app nunca transmite un archivo
-  solo porque apareció en la carpeta.
+  solo porque apareció en la carpeta. El botón solo se habilita cuando
+  hay archivo seleccionado, máquina elegida y cable conectado.
+- La navegación de carpetas valida siempre que la ruta pedida quede
+  dentro de `cnc-programs` (evita salir de la carpeta con `..`).
 - El control de flujo (XON/XOFF o RTS/CTS) lo maneja el driver serial del
   sistema operativo (vía pyserial/termios) al abrir el puerto con esos
   flags activados; la transmisión se pausa sola si la máquina manda XOFF.

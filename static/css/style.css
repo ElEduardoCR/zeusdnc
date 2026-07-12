@@ -13,23 +13,18 @@ html, body {
   overflow: hidden;
 }
 
-#app {
-  height: calc(100vh - 64px);
-  overflow: hidden;
-}
-
 .topbar {
-  height: 64px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   background: #1c2230;
   border-bottom: 2px solid #2a3142;
 }
 
 .brand {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 600;
 }
 
@@ -37,15 +32,16 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .dot {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: #c0392b;
   box-shadow: 0 0 8px rgba(192, 57, 43, 0.7);
+  flex: none;
 }
 
 .dot.connected {
@@ -53,194 +49,245 @@ html, body {
   box-shadow: 0 0 8px rgba(46, 204, 113, 0.7);
 }
 
-.screen {
-  display: none;
-  height: 100%;
-  padding: 32px;
-  overflow: auto;
-}
-
-.screen.active {
-  display: block;
-}
-
-.center-message {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+/* ---- Layout de 3 columnas ---- */
+.columns {
+  height: calc(100vh - 60px);
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
   gap: 12px;
+  padding: 12px;
 }
 
-.big-icon {
-  font-size: 5rem;
-}
-
-.center-message h1 {
-  font-size: 2rem;
-  margin: 0;
-}
-
-.center-message p {
-  max-width: 560px;
-  color: #9aa4b2;
-  font-size: 1.1rem;
-}
-
-.subtitle {
-  color: #9aa4b2;
-  font-size: 1.1rem;
-  margin-top: -8px;
-  margin-bottom: 24px;
-}
-
-.machine-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 20px;
-}
-
-.machine-btn {
-  background: #232b3d;
-  border: 3px solid #33405a;
-  border-radius: 16px;
-  color: #f0f2f5;
-  padding: 28px 20px;
-  font-size: 1.4rem;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 120px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.machine-btn:active {
-  background: #2f3b54;
-  border-color: #4d7dff;
-}
-
-.machine-btn .machine-btn-sub {
-  font-size: 0.95rem;
-  font-weight: 400;
-  color: #9aa4b2;
-}
-
-.main-layout {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 24px;
-  height: 100%;
-}
-
-.files-panel, .action-panel {
+.col {
   background: #1c2230;
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
-.panel-header {
+.col-header {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  flex: none;
+}
+
+/* La columna de envio puede tener mas contenido que alto (alarma +
+   maquinas + archivo + boton + progreso); en pantallas bajas se desplaza
+   con scroll propio para que todo sea alcanzable con el dedo. */
+.col-action {
+  overflow-y: auto;
+}
+
+/* ---- Columna izquierda: explorador ---- */
+.breadcrumb {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+  flex: none;
 }
 
-.panel-header h2 {
-  margin: 0;
-  font-size: 1.3rem;
+.crumb {
+  background: #2a3346;
+  border: none;
+  color: #cdd5e0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.folder-hint {
-  color: #6b7480;
-  font-size: 0.85rem;
+.crumb:active {
+  background: #35415a;
 }
 
-.file-list {
+.crumb.current {
+  background: transparent;
+  color: #9aa4b2;
+  cursor: default;
+}
+
+.crumb-sep {
+  color: #566072;
+}
+
+.browser {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.file-row {
+.entry {
   background: #232b3d;
   border: 3px solid transparent;
-  border-radius: 12px;
-  padding: 18px 20px;
+  border-radius: 10px;
+  padding: 14px 14px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   cursor: pointer;
-  font-size: 1.1rem;
-  min-height: 64px;
+  font-size: 1.05rem;
+  min-height: 56px;
 }
 
-.file-row:active {
+.entry:active {
   background: #2a3346;
 }
 
-.file-row.selected {
+.entry.selected {
   border-color: #4d7dff;
   background: #253150;
 }
 
-.file-row .file-name {
-  overflow-wrap: anywhere;
+.entry .icon {
+  font-size: 1.3rem;
+  flex: none;
 }
 
-.file-row .file-size {
-  color: #9aa4b2;
-  font-size: 0.9rem;
+.entry .entry-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  margin-left: 12px;
+  flex: 1;
+}
+
+.entry .entry-size {
+  color: #9aa4b2;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .empty-hint {
   color: #6b7480;
   text-align: center;
-  padding: 40px 0;
-  font-size: 1.05rem;
+  padding: 30px 10px;
+  font-size: 1rem;
 }
 
-.machine-card, .selected-file-card {
-  background: #232b3d;
-  border-radius: 12px;
-  padding: 18px;
-  margin-bottom: 16px;
+/* ---- Columna centro: contenido ---- */
+.content-view {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  background: #14181f;
+  border-radius: 10px;
+  padding: 14px;
+  font-family: "DejaVu Sans Mono", "Consolas", monospace;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #d7deea;
+  white-space: pre;
+  user-select: text;
 }
 
-.machine-card-label, .selected-file-label {
+.content-view .placeholder {
+  color: #6b7480;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  white-space: normal;
+}
+
+.truncated-note {
+  color: #e0a52e;
+}
+
+/* ---- Columna derecha: envio ---- */
+.alarm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #3a1d1d;
+  border: 2px solid #c0392b;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+  flex: none;
+}
+
+.alarm.ok {
+  background: #16301f;
+  border-color: #2ecc71;
+}
+
+.alarm-icon {
+  font-size: 1.3rem;
+  flex: none;
+}
+
+.section-label {
   color: #9aa4b2;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-bottom: 8px;
 }
 
-.machine-card-name {
-  font-size: 1.6rem;
-  font-weight: 700;
-  margin: 6px 0 4px;
+.machine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex: none;
 }
 
-.machine-card-params {
+.machine-btn {
+  background: #232b3d;
+  border: 3px solid #33405a;
+  border-radius: 12px;
+  color: #f0f2f5;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 60px;
+}
+
+.machine-btn:active {
+  background: #2f3b54;
+}
+
+.machine-btn.selected {
+  border-color: #4d7dff;
+  background: #253150;
+}
+
+.machine-btn .machine-name {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.machine-btn .machine-sub {
+  font-size: 0.82rem;
   color: #9aa4b2;
-  font-size: 0.9rem;
+}
+
+.selected-file-card {
+  background: #232b3d;
+  border-radius: 10px;
+  padding: 12px 14px;
   margin-bottom: 14px;
+  flex: none;
 }
 
 .selected-file-name {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin-top: 6px;
+  margin-top: 4px;
   overflow-wrap: anywhere;
 }
 
@@ -251,13 +298,12 @@ html, body {
   font-weight: 600;
   padding: 16px 20px;
   cursor: pointer;
-  min-height: 56px;
+  min-height: 54px;
 }
 
 .btn-secondary {
   background: #33405a;
   color: #f0f2f5;
-  width: 100%;
 }
 
 .btn-secondary:active {
@@ -274,10 +320,16 @@ html, body {
 }
 
 .btn-send {
+  background: #4d7dff;
+  color: #fff;
   width: 100%;
-  font-size: 1.4rem;
-  padding: 22px;
-  margin-top: auto;
+  font-size: 1.3rem;
+  padding: 20px;
+  flex: none;
+}
+
+.btn-send:active {
+  background: #3d67e0;
 }
 
 .btn-send:disabled {
@@ -286,12 +338,22 @@ html, body {
   cursor: not-allowed;
 }
 
+.send-hint {
+  color: #9aa4b2;
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 1em;
+  flex: none;
+}
+
 .transfer-box {
   display: none;
-  margin-top: 18px;
+  margin-top: 14px;
   background: #232b3d;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 10px;
+  padding: 14px;
+  flex: none;
 }
 
 .transfer-box.visible {
@@ -305,9 +367,9 @@ html, body {
 
 .progress-track {
   width: 100%;
-  height: 20px;
+  height: 18px;
   background: #14181f;
-  border-radius: 10px;
+  border-radius: 9px;
   overflow: hidden;
 }
 
@@ -329,9 +391,10 @@ html, body {
 .transfer-detail {
   margin-top: 10px;
   color: #9aa4b2;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
+/* ---- Modal ---- */
 .modal-overlay {
   display: none;
   position: fixed;
@@ -369,96 +432,54 @@ html, body {
   flex: 1;
 }
 
-@media (max-width: 600px) {
-  .main-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-  }
-}
-
-/* Pantallas tactiles bajas (p.ej. 800x480, la oficial de 7" de Raspberry
-   Pi): se compactan paddings/margenes para que todo el flujo de envio
-   (maquina activa, archivo, boton ENVIAR y progreso) quepa sin scroll. */
+/* ---- Pantallas tactiles bajas (p.ej. 800x480 de 7") ---- */
 @media (max-height: 560px) {
-  .screen {
-    padding: 16px 24px;
+  .topbar {
+    height: 48px;
   }
 
-  .center-message {
-    gap: 6px;
+  .columns {
+    height: calc(100vh - 48px);
+    gap: 8px;
+    padding: 8px;
   }
 
-  .big-icon {
-    font-size: 3rem;
+  .col {
+    padding: 10px;
   }
 
-  h1 {
-    font-size: 1.4rem;
-    margin: 0 0 4px;
+  .col-header {
+    font-size: 1rem;
+    margin-bottom: 6px;
   }
 
-  .subtitle {
-    margin-bottom: 14px;
-  }
-
-  .machine-grid {
-    gap: 12px;
-  }
-
-  .machine-btn {
-    padding: 16px 16px;
-    min-height: 84px;
-    font-size: 1.2rem;
-  }
-
-  .main-layout {
-    gap: 14px;
-  }
-
-  .files-panel, .action-panel {
-    padding: 12px;
-  }
-
-  .panel-header {
-    margin-bottom: 8px;
-  }
-
-  .panel-header h2 {
-    font-size: 1.1rem;
-  }
-
-  .file-row {
-    padding: 10px 14px;
-    min-height: 44px;
+  .entry {
+    padding: 10px 12px;
+    min-height: 46px;
     font-size: 1rem;
   }
 
-  .machine-card, .selected-file-card {
-    padding: 10px 14px;
+  .alarm {
+    padding: 8px 12px;
     margin-bottom: 10px;
   }
 
-  .machine-card-name {
-    font-size: 1.25rem;
-    margin: 2px 0;
+  .machine-btn {
+    padding: 10px 12px;
+    min-height: 50px;
   }
 
-  .machine-card-params {
-    margin-bottom: 8px;
+  .machine-list {
+    margin-bottom: 10px;
   }
 
-  .btn {
-    padding: 10px 16px;
-    min-height: 44px;
+  .selected-file-card {
+    padding: 8px 12px;
+    margin-bottom: 10px;
   }
 
   .btn-send {
-    font-size: 1.15rem;
     padding: 14px;
-  }
-
-  .transfer-box {
-    margin-top: 10px;
-    padding: 10px 14px;
+    font-size: 1.15rem;
   }
 }
