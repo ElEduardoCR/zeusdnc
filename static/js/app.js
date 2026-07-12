@@ -71,6 +71,13 @@
   const btnConfirmCancel = $("btnConfirmCancel");
   const btnConfirmOk = $("btnConfirmOk");
 
+  // Teclado G-code
+  const actionPanel = $("actionPanel");
+  const keyboardPanel = $("keyboardPanel");
+  const keyboard = $("keyboard");
+  const kbTarget = $("kbTarget");
+  const btnCloseKeyboard = $("btnCloseKeyboard");
+
   // Estado
   let currentPath = "";
   let selectedFile = null;      // {path, name}
@@ -82,6 +89,7 @@
   let lastFilesVersion = -1;
   let editingMachineId = null;
   let confirmCb = null;
+  let activeField = null;   // campo de texto que recibe las teclas (editor o busqueda)
 
   /* ---------- Utilidades ---------- */
   function esc(s) {
@@ -277,6 +285,7 @@
         editor.value = "";
         editor.readOnly = false;
         editorFilename.textContent = "Sin archivo";
+        hideKeyboard();
         updateSelectedFileUi();
         updateEditorButtons();
         await loadDir(currentPath);
@@ -642,6 +651,111 @@
     }
     updateSendButton();
   }
+
+  /* ---------- Teclado G-code (tercera columna) ---------- */
+  // Solo los caracteres que se usan en programas CNC / G-code: letras de
+  // direccion, digitos, punto, signo, parentesis de comentario, y los
+  // simbolos de macros (# [ ] = %). Nada mas.
+  const KB_LAYOUT = [
+    ["G", "M", "X", "Y", "Z", "F", "S"],
+    ["T", "R", "N", "O", "I", "J", "K"],
+    ["A", "B", "C", "H", "D", "P", "Q"],
+    ["U", "V", "W", "L", "E"],
+    ["1", "2", "3", "4", "5"],
+    ["6", "7", "8", "9", "0"],
+    [".", "-", "+", "/", "=", ":"],
+    ["(", ")", "%", "#", "[", "]"],
+    [
+      { a: "space", l: "espacio", w: 2 },
+      { a: "left", l: "◀" },
+      { a: "right", l: "▶" },
+      { a: "back", l: "⌫" },
+      { a: "enter", l: "↵" },
+    ],
+  ];
+
+  function buildKeyboard() {
+    keyboard.innerHTML = "";
+    KB_LAYOUT.forEach((row) => {
+      const r = document.createElement("div");
+      r.className = "kb-row";
+      row.forEach((key) => {
+        const b = document.createElement("button");
+        b.className = "kb-key";
+        if (typeof key === "string") {
+          b.textContent = key;
+        } else {
+          b.textContent = key.l;
+          b.classList.add("kb-action");
+          if (key.w) b.style.flex = String(key.w);
+        }
+        b.addEventListener("pointerdown", (e) => { e.preventDefault(); pressKey(key); });
+        r.appendChild(b);
+      });
+      keyboard.appendChild(r);
+    });
+  }
+
+  function insertAtCaret(el, text) {
+    const s = el.selectionStart != null ? el.selectionStart : el.value.length;
+    const e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+    el.setRangeText(text, s, e, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function backspaceField(el) {
+    let s = el.selectionStart, e = el.selectionEnd;
+    if (s === e) { if (s === 0) return; s = s - 1; }
+    el.setRangeText("", s, e, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function moveCaret(el, d) {
+    const p = Math.max(0, Math.min(el.value.length, (el.selectionStart || 0) + d));
+    el.setSelectionRange(p, p);
+  }
+
+  function pressKey(key) {
+    if (!activeField) activeField = editor;
+    const editingReadonly = activeField === editor && editor.readOnly;
+    if (typeof key === "string") {
+      if (editingReadonly) return;
+      insertAtCaret(activeField, key);
+      return;
+    }
+    switch (key.a) {
+      case "space": if (!editingReadonly) insertAtCaret(activeField, " "); break;
+      case "back": if (!editingReadonly) backspaceField(activeField); break;
+      case "enter":
+        if (activeField === editor) { if (!editingReadonly) insertAtCaret(editor, "\n"); }
+        else gotoMatch(true);
+        break;
+      case "left": moveCaret(activeField, -1); break;
+      case "right": moveCaret(activeField, 1); break;
+    }
+  }
+
+  function showKeyboard(label) {
+    kbTarget.textContent = label;
+    actionPanel.style.display = "none";
+    keyboardPanel.classList.add("visible");
+    document.body.classList.add("kb-active");
+  }
+
+  function hideKeyboard() {
+    keyboardPanel.classList.remove("visible");
+    actionPanel.style.display = "";
+    document.body.classList.remove("kb-active");
+    if (activeField) activeField.blur();
+    activeField = null;
+  }
+
+  btnCloseKeyboard.onclick = hideKeyboard;
+  editor.addEventListener("focus", () => { activeField = editor; showKeyboard("Editando programa"); });
+  findInput.addEventListener("focus", () => { activeField = findInput; showKeyboard("Buscar"); });
+  replaceInput.addEventListener("focus", () => { activeField = replaceInput; showKeyboard("Reemplazar"); });
+
+  buildKeyboard();
 
   /* ---------- Arranque ---------- */
   loadDir("");

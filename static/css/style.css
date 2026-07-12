@@ -79,6 +79,84 @@ html, body {
   overflow-y: auto;
 }
 
+/* ---- Teclado G-code (tercera columna, al editar) ---- */
+.keyboard-panel {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.keyboard-panel.visible {
+  display: flex;
+}
+
+.kb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+}
+
+.kb-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.kb-target {
+  color: #9aa4b2;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 8px 0;
+  flex: none;
+}
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-row {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+}
+
+.kb-key {
+  flex: 1;
+  background: #2a3346;
+  border: none;
+  color: #f0f2f5;
+  border-radius: 8px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "DejaVu Sans Mono", "Consolas", monospace;
+}
+
+.kb-key:active {
+  background: #3d67e0;
+}
+
+.kb-key.kb-action {
+  background: #33405a;
+  font-size: 0.95rem;
+}
+
+/* Al activar el teclado, la tercera columna se ensancha para teclas mas grandes */
+body.kb-active .columns {
+  grid-template-columns: 0.85fr 1.35fr 1.5fr;
+}
+
 /* ---- Columna izquierda: explorador ---- */
 .breadcrumb {
   display: flex;
