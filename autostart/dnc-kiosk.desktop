@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=DNC Kiosk
+Comment=Abre la interfaz DNC en Chromium a pantalla completa al iniciar sesion
+Exec=/home/eduardo/ZeuzDNC/autostart/kiosk.sh
+X-GNOME-Autostart-enabled=true
+NoDisplay=false

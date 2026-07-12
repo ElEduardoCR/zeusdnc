@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>DNC - Transferencia CNC</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">DNC · Transferencia CNC</div>
+    <div class="usb-status" id="usbStatus">
+      <span class="dot" id="usbDot"></span>
+      <span id="usbLabel">Buscando adaptador...</span>
+    </div>
+  </header>
+
+  <main id="app">
+
+    <!-- Pantalla: sin adaptador conectado -->
+    <section id="screen-no-usb" class="screen">
+      <div class="center-message">
+        <div class="big-icon">🔌</div>
+        <h1>Conecta el adaptador RS232</h1>
+        <p>Cuando conectes el adaptador USB-RS232 a la Raspberry Pi, la pantalla te pedira que elijas a que maquina corresponde.</p>
+      </div>
+    </section>
+
+    <!-- Pantalla: elegir maquina -->
+    <section id="screen-select-machine" class="screen">
+      <h1>¿A que maquina corresponde este adaptador?</h1>
+      <p class="subtitle" id="usbDeviceLabel"></p>
+      <div id="machineGrid" class="machine-grid"></div>
+    </section>
+
+    <!-- Pantalla: principal (archivos + envio) -->
+    <section id="screen-main" class="screen">
+      <div class="main-layout">
+        <div class="files-panel">
+          <div class="panel-header">
+            <h2>Programas disponibles</h2>
+            <span class="folder-hint">/home/eduardo/cnc-programs</span>
+          </div>
+          <div id="fileList" class="file-list"></div>
+        </div>
+
+        <div class="action-panel">
+          <div class="machine-card">
+            <div class="machine-card-label">Maquina activa</div>
+            <div class="machine-card-name" id="activeMachineName">-</div>
+            <div class="machine-card-params" id="activeMachineParams"></div>
+            <button class="btn btn-secondary" id="btnChangeMachine">Cambiar maquina</button>
+          </div>
+
+          <div class="selected-file-card">
+            <div class="selected-file-label">Archivo seleccionado</div>
+            <div class="selected-file-name" id="selectedFileName">Ninguno</div>
+          </div>
+
+          <button class="btn btn-primary btn-send" id="btnSend" disabled>ENVIAR</button>
+
+          <div class="transfer-box" id="transferBox">
+            <div class="transfer-title" id="transferTitle"></div>
+            <div class="progress-track">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="transfer-detail" id="transferDetail"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal de confirmacion de envio -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal-box">
+      <h2>Confirmar envio</h2>
+      <p id="confirmText"></p>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnCancelSend">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmSend">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

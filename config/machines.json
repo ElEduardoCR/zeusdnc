@@ -1,0 +1,24 @@
+{
+  "machines": [
+    {
+      "id": "fanuc",
+      "name": "Fanuc",
+      "baudrate": 4800,
+      "bytesize": 7,
+      "parity": "E",
+      "stopbits": 2,
+      "flow_control": "xonxoff",
+      "line_terminator": "CR"
+    },
+    {
+      "id": "fadal",
+      "name": "Fadal",
+      "baudrate": 9600,
+      "bytesize": 8,
+      "parity": "N",
+      "stopbits": 1,
+      "flow_control": "xonxoff",
+      "line_terminator": "CRLF"
+    }
+  ]
+}
