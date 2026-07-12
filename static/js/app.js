@@ -71,7 +71,12 @@
   const btnConfirmCancel = $("btnConfirmCancel");
   const btnConfirmOk = $("btnConfirmOk");
 
+  // Editor con resaltado
+  const editorBackdrop = $("editorBackdrop");
+  const editorHighlight = $("editorHighlight");
+
   // Teclado G-code
+  const btnKeyboard = $("btnKeyboard");
   const actionPanel = $("actionPanel");
   const keyboardPanel = $("keyboardPanel");
   const keyboard = $("keyboard");
@@ -90,6 +95,7 @@
   let editingMachineId = null;
   let confirmCb = null;
   let activeField = null;   // campo de texto que recibe las teclas (editor o busqueda)
+  let keyboardOn = false;   // el teclado se activa/desactiva con un boton, no solo
 
   /* ---------- Utilidades ---------- */
   function esc(s) {
@@ -212,6 +218,7 @@
       editor.readOnly = false;
       editorFilename.textContent = "Sin archivo";
       editorDirty = false;
+      updateHighlight();
       updateEditorButtons();
       return;
     }
@@ -221,11 +228,13 @@
         editor.value = "";
         editor.readOnly = true;
         editorFilename.textContent = selectedFile.name + " (no disponible)";
+        updateHighlight();
         updateEditorButtons();
         return;
       }
       const data = await res.json();
       editor.value = data.content;
+      editor.scrollTop = 0;
       editorDirty = false;
       if (data.truncated) {
         editor.readOnly = true;
@@ -234,6 +243,7 @@
         editor.readOnly = false;
         editorFilename.textContent = data.name;
       }
+      updateHighlight();
       updateEditorButtons();
       updateSendButton();
     } catch (e) { /* reintenta en el siguiente ciclo */ }
@@ -245,10 +255,16 @@
   }
 
   editor.addEventListener("input", () => {
+    updateHighlight();
     if (editor.readOnly) return;
     editorDirty = true;
     updateEditorButtons();
     updateSendButton();
+  });
+
+  editor.addEventListener("scroll", () => {
+    editorBackdrop.scrollTop = editor.scrollTop;
+    editorBackdrop.scrollLeft = editor.scrollLeft;
   });
 
   async function saveFile() {
@@ -285,7 +301,8 @@
         editor.value = "";
         editor.readOnly = false;
         editorFilename.textContent = "Sin archivo";
-        hideKeyboard();
+        updateHighlight();
+        setKeyboard(false);
         updateSelectedFileUi();
         updateEditorButtons();
         await loadDir(currentPath);
@@ -380,6 +397,7 @@
     if (s !== e && sel.toLowerCase() === q.toLowerCase()) {
       editor.setRangeText(replaceInput.value, s, e, "end");
       editorDirty = true;
+      updateHighlight();
       updateEditorButtons();
       updateSendButton();
     }
@@ -398,6 +416,7 @@
     out += editor.value.slice(last);
     editor.value = out;
     editorDirty = true;
+    updateHighlight();
     updateEditorButtons();
     updateSendButton();
     findCount.textContent = matches.length + " reempl.";
@@ -410,6 +429,7 @@
       const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd);
       if (sel && sel.length < 80 && !sel.includes("\n")) findInput.value = sel;
       updateFindCount();
+      setKeyboard(true);           // buscar requiere escribir: se enciende el teclado
       setTimeout(() => { findInput.focus(); findInput.select(); }, 50);
     }
   };
@@ -652,48 +672,120 @@
     updateSendButton();
   }
 
+  /* ---------- Resaltado de sintaxis del G-code ---------- */
+  function wordClass(L) {
+    if (L === "G") return "g-g";
+    if (L === "M") return "g-m";
+    if ("XYZABCUVW".indexOf(L) !== -1) return "g-axis";
+    if ("IJKR".indexOf(L) !== -1) return "g-arc";
+    if (L === "F" || L === "S") return "g-fs";
+    if ("THD".indexOf(L) !== -1) return "g-tool";
+    if (L === "N") return "g-n";
+    if (L === "O") return "g-o";
+    return "g-oth";
+  }
+
+  function highlightGcode(text) {
+    let out = "";
+    let i = 0;
+    const n = text.length;
+    while (i < n) {
+      const c = text[i];
+      if (c === "(") {                       // comentario ( ... )
+        let j = text.indexOf(")", i);
+        if (j === -1) j = n - 1;
+        out += '<span class="g-cmt">' + esc(text.slice(i, j + 1)) + "</span>";
+        i = j + 1;
+      } else if (c === "%") {                 // marca de inicio/fin de cinta
+        out += '<span class="g-pct">%</span>';
+        i++;
+      } else if (/[A-Za-z]/.test(c)) {        // palabra: letra + numero
+        let j = i + 1;
+        if (text[j] === "-" || text[j] === "+") j++;
+        while (j < n && /[0-9.]/.test(text[j])) j++;
+        out += '<span class="' + wordClass(c.toUpperCase()) + '">' + esc(text.slice(i, j)) + "</span>";
+        i = j;
+      } else {
+        out += esc(c);
+        i++;
+      }
+    }
+    return out;
+  }
+
+  function updateHighlight() {
+    editorHighlight.innerHTML = highlightGcode(editor.value);
+    editorBackdrop.scrollTop = editor.scrollTop;
+    editorBackdrop.scrollLeft = editor.scrollLeft;
+  }
+
   /* ---------- Teclado G-code (tercera columna) ---------- */
   // Solo los caracteres que se usan en programas CNC / G-code: letras de
-  // direccion, digitos, punto, signo, parentesis de comentario, y los
-  // simbolos de macros (# [ ] = %). Nada mas.
-  const KB_LAYOUT = [
-    ["G", "M", "X", "Y", "Z", "F", "S"],
-    ["T", "R", "N", "O", "I", "J", "K"],
-    ["A", "B", "C", "H", "D", "P", "Q"],
-    ["U", "V", "W", "L", "E"],
-    ["1", "2", "3", "4", "5"],
-    ["6", "7", "8", "9", "0"],
-    [".", "-", "+", "/", "=", ":"],
-    ["(", ")", "%", "#", "[", "]"],
-    [
-      { a: "space", l: "espacio", w: 2 },
-      { a: "left", l: "◀" },
-      { a: "right", l: "▶" },
-      { a: "back", l: "⌫" },
-      { a: "enter", l: "↵" },
-    ],
-  ];
+  // direccion, digitos (en distribucion tipo numpad), punto, signo,
+  // parentesis de comentario y simbolos de macro (# [ ] = %). Nada mas.
+  function keyEl(key) {
+    const b = document.createElement("button");
+    b.className = "kb-key";
+    if (typeof key === "string") {
+      b.textContent = key;
+      if (/^[A-Za-z]$/.test(key)) b.classList.add(wordClass(key.toUpperCase()));
+      else if (/^[0-9]$/.test(key)) b.classList.add("g-num");
+    } else {
+      b.textContent = key.l;
+      b.classList.add("kb-action");
+      if (key.w) b.style.flex = String(key.w);
+    }
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); pressKey(key); });
+    return b;
+  }
+
+  function rowEl(keys) {
+    const r = document.createElement("div");
+    r.className = "kb-row";
+    keys.forEach((k) => r.appendChild(keyEl(k)));
+    return r;
+  }
+
+  function colEl(rows, cls, flex) {
+    const c = document.createElement("div");
+    c.className = "kb-col" + (cls ? " " + cls : "");
+    if (flex) c.style.flex = String(flex);
+    rows.forEach((row) => c.appendChild(rowEl(row)));
+    return c;
+  }
 
   function buildKeyboard() {
     keyboard.innerHTML = "";
-    KB_LAYOUT.forEach((row) => {
-      const r = document.createElement("div");
-      r.className = "kb-row";
-      row.forEach((key) => {
-        const b = document.createElement("button");
-        b.className = "kb-key";
-        if (typeof key === "string") {
-          b.textContent = key;
-        } else {
-          b.textContent = key.l;
-          b.classList.add("kb-action");
-          if (key.w) b.style.flex = String(key.w);
-        }
-        b.addEventListener("pointerdown", (e) => { e.preventDefault(); pressKey(key); });
-        r.appendChild(b);
-      });
-      keyboard.appendChild(r);
-    });
+
+    // Letras de direccion (todas las que pueden aparecer en G-code)
+    keyboard.appendChild(colEl([
+      ["G", "M", "N", "O", "X", "Y", "Z"],
+      ["A", "B", "C", "U", "V", "W", "H"],
+      ["I", "J", "K", "R", "F", "S", "T"],
+      ["P", "Q", "D", "L", "E"],
+    ], "", 4));
+
+    // Zona inferior: numpad (izquierda) + simbolos (derecha)
+    const bottom = document.createElement("div");
+    bottom.className = "kb-bottom";
+    bottom.appendChild(colEl([
+      ["7", "8", "9"],
+      ["4", "5", "6"],
+      ["1", "2", "3"],
+      [".", "0", "-"],
+    ], "kb-numpad"));
+    bottom.appendChild(colEl([
+      ["(", ")", "/"],
+      ["+", "=", "%"],
+      ["#", "[", "]"],
+      [":", { a: "back", l: "⌫" }, { a: "enter", l: "↵" }],
+    ], "kb-symbols"));
+    keyboard.appendChild(bottom);
+
+    // Fila de espacio + cursor
+    keyboard.appendChild(colEl([
+      [{ a: "space", l: "espacio", w: 3 }, { a: "left", l: "◀" }, { a: "right", l: "▶" }],
+    ], "", 1));
   }
 
   function insertAtCaret(el, text) {
@@ -713,6 +805,7 @@
   function moveCaret(el, d) {
     const p = Math.max(0, Math.min(el.value.length, (el.selectionStart || 0) + d));
     el.setSelectionRange(p, p);
+    if (el === editor) scrollToSel();
   }
 
   function pressKey(key) {
@@ -735,25 +828,34 @@
     }
   }
 
-  function showKeyboard(label) {
-    kbTarget.textContent = label;
-    actionPanel.style.display = "none";
-    keyboardPanel.classList.add("visible");
-    document.body.classList.add("kb-active");
+  // El teclado se activa/desactiva con un boton; ya no aparece solo al tocar
+  // el texto (asi se puede ver y hacer scroll de un programa sin que estorbe).
+  function setKeyboard(on) {
+    keyboardOn = on;
+    if (on) {
+      actionPanel.style.display = "none";
+      keyboardPanel.classList.add("visible");
+      document.body.classList.add("kb-active");
+      btnKeyboard.classList.add("active");
+      kbTarget.textContent =
+        activeField === findInput ? "Buscar" :
+        activeField === replaceInput ? "Reemplazar" : "Editando programa";
+    } else {
+      keyboardPanel.classList.remove("visible");
+      actionPanel.style.display = "";
+      document.body.classList.remove("kb-active");
+      btnKeyboard.classList.remove("active");
+    }
   }
 
-  function hideKeyboard() {
-    keyboardPanel.classList.remove("visible");
-    actionPanel.style.display = "";
-    document.body.classList.remove("kb-active");
-    if (activeField) activeField.blur();
-    activeField = null;
-  }
+  btnKeyboard.onclick = () => setKeyboard(!keyboardOn);
+  btnCloseKeyboard.onclick = () => setKeyboard(false);
 
-  btnCloseKeyboard.onclick = hideKeyboard;
-  editor.addEventListener("focus", () => { activeField = editor; showKeyboard("Editando programa"); });
-  findInput.addEventListener("focus", () => { activeField = findInput; showKeyboard("Buscar"); });
-  replaceInput.addEventListener("focus", () => { activeField = replaceInput; showKeyboard("Reemplazar"); });
+  // Los focus solo registran a que campo van las teclas y actualizan la
+  // etiqueta; NO abren el teclado (eso lo controla el boton).
+  editor.addEventListener("focus", () => { activeField = editor; if (keyboardOn) kbTarget.textContent = "Editando programa"; });
+  findInput.addEventListener("focus", () => { activeField = findInput; if (keyboardOn) kbTarget.textContent = "Buscar"; });
+  replaceInput.addEventListener("focus", () => { activeField = replaceInput; if (keyboardOn) kbTarget.textContent = "Reemplazar"; });
 
   buildKeyboard();
 

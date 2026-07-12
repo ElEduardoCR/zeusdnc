@@ -116,14 +116,32 @@ html, body {
 .keyboard {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
 }
 
+.kb-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+/* Zona inferior: numpad (izquierda) y simbolos (derecha) lado a lado */
+.kb-bottom {
+  display: flex;
+  gap: 6px;
+  flex: 4;
+}
+
+.kb-bottom .kb-col {
+  flex: 1;
+}
+
 .kb-row {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   flex: 1;
 }
 
@@ -133,10 +151,10 @@ html, body {
   border: none;
   color: #f0f2f5;
   border-radius: 8px;
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
   cursor: pointer;
-  min-height: 34px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,12 +163,36 @@ html, body {
 
 .kb-key:active {
   background: #3d67e0;
+  color: #fff;
 }
 
 .kb-key.kb-action {
   background: #33405a;
-  font-size: 0.95rem;
+  color: #f0f2f5;
+  font-size: 1rem;
+  font-weight: 600;
 }
+
+/* Boton toggle del teclado, activo */
+.tbtn.active {
+  background: #4d7dff;
+  color: #fff;
+}
+
+/* Colores de resaltado, compartidos por el editor y las teclas de letras.
+   Van DESPUES de .kb-key para que en las teclas ganen sobre el color base. */
+.g-cmt { color: #74909e; font-style: italic; }
+.g-pct { color: #ff6b9d; }
+.g-g { color: #5fd0f0; }
+.g-m { color: #ff9d5c; }
+.g-axis { color: #86e08a; }
+.g-arc { color: #b6e88f; }
+.g-fs { color: #c79bff; }
+.g-tool { color: #ffd45c; }
+.g-n { color: #8a94a3; }
+.g-o { color: #ffd45c; font-weight: 600; }
+.g-num { color: #cdd6e3; }
+.g-oth { color: #d7deea; }
 
 /* Al activar el teclado, la tercera columna se ensancha para teclas mas grandes */
 body.kb-active .columns {
@@ -342,22 +384,52 @@ body.kb-active .columns {
   text-align: center;
 }
 
-.editor {
+/* Editor con resaltado de sintaxis: un <pre> coloreado (backdrop) debajo de
+   un <textarea> de texto transparente. Ambos deben compartir EXACTAMENTE la
+   misma metrica (fuente, tamaño, interlineado, padding, borde) para que el
+   texto quede alineado pixel a pixel. */
+.editor-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
-  resize: none;
-  width: 100%;
-  background: #14181f;
-  border: 1px solid #2a3142;
-  border-radius: 10px;
+}
+
+.editor,
+.editor-backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
   padding: 12px;
-  color: #d7deea;
+  border: 1px solid transparent;
+  border-radius: 10px;
   font-family: "DejaVu Sans Mono", "Consolas", monospace;
   font-size: 0.95rem;
   line-height: 1.45;
   white-space: pre;
   overflow: auto;
+  tab-size: 2;
+}
+
+.editor-backdrop {
+  z-index: 0;
+  background: #14181f;
+  color: #d7deea;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.editor {
+  z-index: 1;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: #f0f2f5;
+  border-color: #2a3142;
   user-select: text;
+}
+
+.editor::placeholder {
+  color: #6b7480;
 }
 
 .editor:focus {

@@ -31,6 +31,7 @@
         <div class="editor-actions">
           <button class="tbtn" id="btnNew">＋ Nuevo</button>
           <button class="tbtn" id="btnFind">🔍</button>
+          <button class="tbtn" id="btnKeyboard">⌨ Teclado</button>
           <button class="tbtn" id="btnSave" disabled>💾 Guardar</button>
           <button class="tbtn danger" id="btnDeleteFile" disabled>🗑</button>
         </div>
@@ -47,8 +48,11 @@
         <button class="tbtn" id="btnFindClose">✕</button>
       </div>
 
-      <textarea class="editor" id="editor" spellcheck="false" inputmode="none"
-        placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
+      <div class="editor-wrap">
+        <pre class="editor-backdrop" id="editorBackdrop" aria-hidden="true"><code id="editorHighlight"></code></pre>
+        <textarea class="editor" id="editor" spellcheck="false" inputmode="none"
+          placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
+      </div>
     </section>
 
     <!-- Columna derecha: maquina + envio + alarma (o teclado al editar) -->
