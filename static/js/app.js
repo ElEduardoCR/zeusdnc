@@ -1161,15 +1161,25 @@
 
   function buildFloatKeyboard() {
     floatKbKeys.innerHTML = "";
+    // Cada tecla se suscribe a mousedown/touchstart/pointerdown para que
+    // ninguna variante de evento quede sin prevenir. El preventDefault evita
+    // que el navegador mueva el foco al boton (que es focusable por
+    // naturaleza) y lo saque del input que estamos editando.
+    const press = (fn) => (e) => { e.preventDefault(); fn(e); };
     FK_ROWS.forEach((row) => {
       const r = document.createElement("div");
       r.className = "fk-row";
       row.forEach((ch) => {
         const b = document.createElement("button");
+        b.type = "button";          // fuera de un form, pero por si acaso
+        b.tabIndex = -1;            // las teclas no participan en el foco
         b.className = "fk-key";
         b.textContent = ch;
         b.dataset.char = ch;
-        b.addEventListener("pointerdown", (e) => { e.preventDefault(); fkPress(ch); });
+        const fn = press(() => fkPress(ch));
+        b.addEventListener("pointerdown", fn);
+        b.addEventListener("mousedown", fn);
+        b.addEventListener("touchstart", fn, { passive: false });
         r.appendChild(b);
       });
       floatKbKeys.appendChild(r);
@@ -1178,9 +1188,14 @@
     r.className = "fk-row";
     const mk = (label, cls, fn) => {
       const b = document.createElement("button");
+      b.type = "button";
+      b.tabIndex = -1;
       b.className = "fk-key " + cls;
       b.textContent = label;
-      b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); });
+      const handler = press(fn);
+      b.addEventListener("pointerdown", handler);
+      b.addEventListener("mousedown", handler);
+      b.addEventListener("touchstart", handler, { passive: false });
       return b;
     };
     r.appendChild(mk("⇧", "action shift-key", toggleShift));
@@ -1273,6 +1288,22 @@
     floatKbBar.addEventListener("pointerup", stop);
     floatKbBar.addEventListener("pointercancel", stop);
   })();
+
+  // Cualquier pointerdown que caiga en el area del teclado (tecla, gap o
+  // fondo del panel) NO debe robar el foco del input que estamos editando.
+  // El navegador, al recibir un pointerdown en un area NO interactiva (un
+  // hueco entre teclas, el padding del panel, etc.), puede decidir mover el
+  // foco o dispar un blur del input activo, y eso es lo que hacia que al
+  // escribir se "saliera" del texto. Excluimos la barra (para no interferir
+  // con el drag) y el boton X (que tiene su propio onclick).
+  const swallow = (e) => {
+    if (e.target.closest("#floatKbClose")) return;
+    if (e.target.closest("#floatKbBar")) return;
+    e.preventDefault();
+  };
+  floatKbKeys.addEventListener("pointerdown", swallow);
+  floatKbKeys.addEventListener("mousedown", swallow);
+  floatKbKeys.addEventListener("touchstart", swallow, { passive: false });
 
   buildFloatKeyboard();
 
