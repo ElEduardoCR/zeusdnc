@@ -887,24 +887,41 @@ body.content-expanded .editor-gutter {
 
 .fs-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   flex: none;
+  margin-bottom: 6px;
 }
 
-.fs-header input {
-  flex: 1;
+.fs-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.fs-search-row {
+  flex: none;
+  margin-bottom: 6px;
+}
+
+.fs-search-row input {
+  width: 100%;
   background: #14181f;
   border: 1px solid #33405a;
   color: #f0f2f5;
   border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 1.1rem;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+.fs-search-row input::placeholder {
+  color: #6b7480;
 }
 
 .fs-hint {
   color: #6b7480;
-  font-size: 0.9rem;
-  margin: 10px 2px;
+  font-size: 0.85rem;
+  margin: 4px 2px 8px;
   flex: none;
 }
 
