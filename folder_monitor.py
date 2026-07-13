@@ -94,6 +94,36 @@ def list_dir(rel_path):
     }
 
 
+def search_files(query, limit=500):
+    """Busca archivos por nombre de forma recursiva dentro de la carpeta.
+    Pensado para miles de archivos: es case-insensitive por subcadena y se
+    corta al llegar a 'limit' resultados.
+    """
+    query = (query or "").strip().lower()
+    if not query:
+        return []
+    base = os.path.realpath(WATCH_DIR)
+    results = []
+    for root, dirs, files in os.walk(base):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fn in sorted(files, key=str.lower):
+            if _is_ignored(fn) or query not in fn.lower():
+                continue
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, base)
+            reldir = os.path.relpath(root, base)
+            if reldir == ".":
+                reldir = ""
+            try:
+                size = os.stat(full).st_size
+            except OSError:
+                size = 0
+            results.append({"name": fn, "path": rel, "dir": reldir, "size": size})
+            if len(results) >= limit:
+                return results
+    return results
+
+
 def read_file(rel_path):
     base = os.path.realpath(WATCH_DIR)
     target = resolve_path(rel_path)

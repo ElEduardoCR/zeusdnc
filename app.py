@@ -53,6 +53,11 @@ def api_file():
     return jsonify(data)
 
 
+@app.route("/api/search")
+def api_search():
+    return jsonify(folder_monitor.search_files(request.args.get("q", "")))
+
+
 @app.route("/api/file/save", methods=["POST"])
 def api_file_save():
     data = request.get_json(force=True, silent=True) or {}

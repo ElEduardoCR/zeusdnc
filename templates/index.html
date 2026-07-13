@@ -19,7 +19,10 @@
 
     <!-- Columna izquierda: explorador de programas -->
     <section class="col col-files">
-      <div class="col-header">Programas</div>
+      <div class="col-header">
+        <span>Programas</span>
+        <button class="expand-btn" id="btnExpandFiles" title="Buscar / expandir">⤢</button>
+      </div>
       <div class="breadcrumb" id="breadcrumb"></div>
       <div class="browser" id="browser"></div>
     </section>
@@ -32,8 +35,12 @@
           <button class="tbtn" id="btnNew">＋ Nuevo</button>
           <button class="tbtn" id="btnFind">🔍</button>
           <button class="tbtn" id="btnKeyboard">⌨ Teclado</button>
+          <button class="tbtn expanded-only" id="btnRenumber">N° Renumerar</button>
+          <button class="tbtn expanded-only" id="btnStripN">Quitar N°</button>
+          <button class="tbtn expanded-only" id="btnGotoLine">Ir a línea</button>
           <button class="tbtn" id="btnSave" disabled>💾 Guardar</button>
           <button class="tbtn danger" id="btnDeleteFile" disabled>🗑</button>
+          <button class="expand-btn" id="btnExpandEditor" title="Expandir editor">⤢</button>
         </div>
       </div>
 
@@ -49,9 +56,12 @@
       </div>
 
       <div class="editor-wrap">
-        <pre class="editor-backdrop" id="editorBackdrop" aria-hidden="true"><code id="editorHighlight"></code></pre>
-        <textarea class="editor" id="editor" spellcheck="false" inputmode="none"
-          placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
+        <div class="editor-gutter" id="editorGutter" aria-hidden="true"></div>
+        <div class="editor-area">
+          <pre class="editor-backdrop" id="editorBackdrop" aria-hidden="true"><code id="editorHighlight"></code></pre>
+          <textarea class="editor" id="editor" spellcheck="false" inputmode="none"
+            placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
+        </div>
       </div>
     </section>
 
@@ -197,6 +207,40 @@
         <button class="btn btn-primary" id="btnConfirmOk">Aceptar</button>
       </div>
     </div>
+  </div>
+
+  <!-- Modal de busqueda de archivos (columna de archivos expandida) -->
+  <div id="fileSearchModal" class="modal-overlay">
+    <div class="fs-panel">
+      <div class="fs-header">
+        <input type="text" id="fsSearch" placeholder="Buscar archivo por nombre..." autocomplete="off" spellcheck="false" inputmode="none">
+        <button class="btn btn-secondary" id="fsClose">Cerrar</button>
+      </div>
+      <div class="fs-hint" id="fsHint">Escribe para buscar en todas las carpetas.</div>
+      <div class="fs-results" id="fsResults"></div>
+    </div>
+  </div>
+
+  <!-- Modal generico de un dato (renumerar / ir a linea) -->
+  <div id="promptModal" class="modal-overlay">
+    <div class="modal-box">
+      <h2 id="promptTitle">Dato</h2>
+      <div class="prompt-fields" id="promptFields"></div>
+      <div class="form-error" id="promptError"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnPromptCancel">Cancelar</button>
+        <button class="btn btn-primary" id="btnPromptOk">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teclado QWERTY flotante y arrastrable -->
+  <div id="floatKeyboard" class="float-kb">
+    <div class="float-kb-bar" id="floatKbBar">
+      <span>Teclado — arrastra para mover</span>
+      <button id="floatKbClose">✕</button>
+    </div>
+    <div class="float-kb-keys" id="floatKbKeys"></div>
   </div>
 
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>

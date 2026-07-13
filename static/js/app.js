@@ -74,6 +74,35 @@
   // Editor con resaltado
   const editorBackdrop = $("editorBackdrop");
   const editorHighlight = $("editorHighlight");
+  const editorGutter = $("editorGutter");
+
+  // Expandir columnas + herramientas avanzadas
+  const btnExpandFiles = $("btnExpandFiles");
+  const btnExpandEditor = $("btnExpandEditor");
+  const btnRenumber = $("btnRenumber");
+  const btnStripN = $("btnStripN");
+  const btnGotoLine = $("btnGotoLine");
+
+  // Buscador de archivos
+  const fileSearchModal = $("fileSearchModal");
+  const fsSearch = $("fsSearch");
+  const fsClose = $("fsClose");
+  const fsHint = $("fsHint");
+  const fsResults = $("fsResults");
+
+  // Prompt generico (renumerar / ir a linea)
+  const promptModal = $("promptModal");
+  const promptTitle = $("promptTitle");
+  const promptFields = $("promptFields");
+  const promptError = $("promptError");
+  const btnPromptCancel = $("btnPromptCancel");
+  const btnPromptOk = $("btnPromptOk");
+
+  // Teclado flotante QWERTY
+  const floatKeyboard = $("floatKeyboard");
+  const floatKbBar = $("floatKbBar");
+  const floatKbClose = $("floatKbClose");
+  const floatKbKeys = $("floatKbKeys");
 
   // Teclado G-code
   const btnKeyboard = $("btnKeyboard");
@@ -101,6 +130,11 @@
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
+
+  const ICON_FOLDER =
+    '<svg class="ficon folder" viewBox="0 0 24 24"><path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
+  const ICON_FILE =
+    '<svg class="ficon file" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path fill="#141821" d="M14 2v6h6"/></svg>';
 
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + " B";
@@ -170,7 +204,7 @@
     data.dirs.forEach((d) => {
       const row = document.createElement("div");
       row.className = "entry dir";
-      row.innerHTML = `<span class="icon">📁</span><span class="entry-name">${esc(d.name)}</span><span class="icon">›</span>`;
+      row.innerHTML = `${ICON_FOLDER}<span class="entry-name">${esc(d.name)}</span><span class="icon">›</span>`;
       row.onclick = () => loadDir(d.path);
       browserEl.appendChild(row);
     });
@@ -178,7 +212,7 @@
       const row = document.createElement("div");
       row.className = "entry file" + (selectedFile && selectedFile.path === f.path ? " selected" : "");
       row.dataset.path = f.path;
-      row.innerHTML = `<span class="icon">📄</span><span class="entry-name">${esc(f.name)}</span><span class="entry-size">${formatSize(f.size)}</span>`;
+      row.innerHTML = `${ICON_FILE}<span class="entry-name">${esc(f.name)}</span><span class="entry-size">${formatSize(f.size)}</span>`;
       row.onclick = () => selectFile(f);
       browserEl.appendChild(row);
     });
@@ -265,6 +299,7 @@
   editor.addEventListener("scroll", () => {
     editorBackdrop.scrollTop = editor.scrollTop;
     editorBackdrop.scrollLeft = editor.scrollLeft;
+    editorGutter.scrollTop = editor.scrollTop;
   });
 
   async function saveFile() {
@@ -717,6 +752,15 @@
     editorHighlight.innerHTML = highlightGcode(editor.value);
     editorBackdrop.scrollTop = editor.scrollTop;
     editorBackdrop.scrollLeft = editor.scrollLeft;
+    updateGutter();
+  }
+
+  function updateGutter() {
+    const lines = editor.value.split("\n").length;
+    let out = "";
+    for (let i = 1; i <= lines; i++) out += i + "\n";
+    editorGutter.textContent = out;
+    editorGutter.scrollTop = editor.scrollTop;
   }
 
   /* ---------- Teclado G-code (tercera columna) ---------- */
@@ -858,6 +902,290 @@
   replaceInput.addEventListener("focus", () => { activeField = replaceInput; if (keyboardOn) kbTarget.textContent = "Reemplazar"; });
 
   buildKeyboard();
+
+  /* ---------- Expandir editor + herramientas avanzadas (tipo NCeditor) ---------- */
+  let contentExpanded = false;
+  function setContentExpanded(on) {
+    contentExpanded = on;
+    document.body.classList.toggle("content-expanded", on);
+    btnExpandEditor.textContent = on ? "⤡" : "⤢";
+    updateGutter();
+  }
+  btnExpandEditor.onclick = () => setContentExpanded(!contentExpanded);
+
+  function applyEditorTransform(fn) {
+    if (editor.readOnly) return;
+    const lines = editor.value.split("\n");
+    editor.value = fn(lines).join("\n");
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function stripLineNumbers() {
+    applyEditorTransform((lines) => lines.map((l) => l.replace(/^(\s*)N\d+\s?/i, "$1")));
+  }
+
+  function renumberLines(start, step) {
+    let num = start;
+    applyEditorTransform((lines) => lines.map((l) => {
+      const t = l.trim();
+      if (t === "" || t.startsWith("%")) return l;         // vacias y % intactas
+      const stripped = l.replace(/^(\s*)N\d+\s?/i, "$1");
+      const m = stripped.match(/^(\s*)([\s\S]*)$/);
+      const line = m[1] + "N" + num + (m[2] ? " " + m[2] : "");
+      num += step;
+      return line;
+    }));
+  }
+
+  function gotoLine(n) {
+    const lines = editor.value.split("\n");
+    n = Math.max(1, Math.min(lines.length, n));
+    let pos = 0;
+    for (let i = 0; i < n - 1; i++) pos += lines[i].length + 1;
+    editor.focus();
+    editor.setSelectionRange(pos, pos);
+    scrollToSel();
+  }
+
+  btnStripN.onclick = () => {
+    if (!selectedFile || editor.readOnly) return;
+    confirmAction("Quitar números de línea", "¿Quitar los N° de todas las líneas del programa?", "Quitar", false, stripLineNumbers);
+  };
+  btnRenumber.onclick = () => {
+    if (!selectedFile || editor.readOnly) return;
+    openPrompt("Renumerar líneas", [
+      { id: "start", label: "Inicio (N)", value: "10" },
+      { id: "step", label: "Incremento", value: "10" },
+    ], (v) => {
+      const start = parseInt(v.start, 10), step = parseInt(v.step, 10);
+      if (!(start >= 0) || !(step > 0)) return "Valores inválidos";
+      renumberLines(start, step);
+    });
+  };
+  btnGotoLine.onclick = () => {
+    openPrompt("Ir a línea", [{ id: "line", label: "Número de línea", value: "" }], (v) => {
+      const n = parseInt(v.line, 10);
+      if (!(n >= 1)) return "Número inválido";
+      gotoLine(n);
+    });
+  };
+
+  /* ---------- Prompt generico ---------- */
+  let promptCb = null;
+  function openPrompt(title, fields, onOk) {
+    promptTitle.textContent = title;
+    promptError.textContent = "";
+    promptFields.innerHTML = "";
+    fields.forEach((f) => {
+      const lab = document.createElement("label");
+      lab.textContent = f.label;
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.inputMode = "none";
+      inp.autocomplete = "off";
+      inp.value = f.value != null ? f.value : "";
+      inp.dataset.id = f.id;
+      inp.addEventListener("focus", () => showFloatKeyboard(inp));
+      lab.appendChild(inp);
+      promptFields.appendChild(lab);
+    });
+    promptCb = onOk;
+    openModal(promptModal);
+    const first = promptFields.querySelector("input");
+    if (first) setTimeout(() => first.focus(), 50);
+  }
+  btnPromptCancel.onclick = () => { closeModal(promptModal); hideFloatKeyboard(); promptCb = null; };
+  btnPromptOk.onclick = () => {
+    const vals = {};
+    promptFields.querySelectorAll("input").forEach((i) => { vals[i.dataset.id] = i.value; });
+    if (promptCb) {
+      const err = promptCb(vals);
+      if (err) { promptError.textContent = err; return; }
+    }
+    closeModal(promptModal);
+    hideFloatKeyboard();
+    promptCb = null;
+  };
+
+  /* ---------- Buscador de archivos (columna de archivos expandida) ---------- */
+  let fsTimer = null;
+  btnExpandFiles.onclick = () => {
+    fsSearch.value = "";
+    fsResults.innerHTML = "";
+    fsHint.style.display = "";
+    fsHint.textContent = "Escribe para buscar en todas las carpetas.";
+    openModal(fileSearchModal);
+    setTimeout(() => fsSearch.focus(), 50);
+  };
+  fsClose.onclick = () => { closeModal(fileSearchModal); hideFloatKeyboard(); };
+  fsSearch.addEventListener("focus", () => showFloatKeyboard(fsSearch));
+  fsSearch.addEventListener("input", () => {
+    clearTimeout(fsTimer);
+    fsTimer = setTimeout(doFileSearch, 200);
+  });
+
+  async function doFileSearch() {
+    const q = fsSearch.value.trim();
+    if (!q) {
+      fsResults.innerHTML = "";
+      fsHint.style.display = "";
+      fsHint.textContent = "Escribe para buscar en todas las carpetas.";
+      return;
+    }
+    let results;
+    try { results = await (await fetch("/api/search?q=" + encodeURIComponent(q))).json(); }
+    catch (e) { return; }
+    renderSearchResults(results);
+  }
+
+  function renderSearchResults(results) {
+    fsResults.innerHTML = "";
+    if (results.length === 0) {
+      fsHint.style.display = "";
+      fsHint.textContent = "Sin resultados.";
+      return;
+    }
+    fsHint.style.display = "none";
+    results.forEach((r) => {
+      const row = document.createElement("div");
+      row.className = "fs-row";
+      const folder = r.dir ? r.dir : "Programas";
+      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(r.name)}</div><div class="fs-path">📁 ${esc(folder)}</div></div><div class="fs-size">${formatSize(r.size)}</div>`;
+      row.onclick = () => pickSearchResult(r);
+      fsResults.appendChild(row);
+    });
+  }
+
+  function pickSearchResult(r) {
+    hideFloatKeyboard();
+    if (editorDirty) {
+      confirmAction("Cambios sin guardar", `Hay cambios sin guardar. ¿Descartarlos y abrir "${r.name}"?`, "Descartar", true, () => doPickSearch(r));
+      return;
+    }
+    doPickSearch(r);
+  }
+
+  async function doPickSearch(r) {
+    selectedFile = { path: r.path, name: r.name };
+    editorDirty = false;
+    await loadDir(r.dir || "");   // navega el explorador a la carpeta del archivo
+    updateSelectedFileUi();
+    markSelected();
+    await loadContent();
+    closeModal(fileSearchModal);
+  }
+
+  /* ---------- Teclado QWERTY flotante y arrastrable ---------- */
+  let floatTarget = null;
+  let floatShift = false;
+  const FK_ROWS = [
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+    ["Z", "X", "C", "V", "B", "N", "M", "_", "-"],
+  ];
+
+  function buildFloatKeyboard() {
+    floatKbKeys.innerHTML = "";
+    FK_ROWS.forEach((row) => {
+      const r = document.createElement("div");
+      r.className = "fk-row";
+      row.forEach((ch) => {
+        const b = document.createElement("button");
+        b.className = "fk-key";
+        b.textContent = ch;
+        b.dataset.char = ch;
+        b.addEventListener("pointerdown", (e) => { e.preventDefault(); fkPress(ch); });
+        r.appendChild(b);
+      });
+      floatKbKeys.appendChild(r);
+    });
+    const r = document.createElement("div");
+    r.className = "fk-row";
+    const mk = (label, cls, fn) => {
+      const b = document.createElement("button");
+      b.className = "fk-key " + cls;
+      b.textContent = label;
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); });
+      return b;
+    };
+    r.appendChild(mk("⇧", "action shift-key", toggleShift));
+    r.appendChild(mk(".", "", () => fkInsert(".")));
+    r.appendChild(mk("espacio", "wide", () => fkInsert(" ")));
+    r.appendChild(mk("⌫", "action", fkBackspace));
+    r.appendChild(mk("↵", "action", hideFloatKeyboard));
+    floatKbKeys.appendChild(r);
+  }
+
+  function fkPress(ch) {
+    if (/[A-Za-z]/.test(ch)) ch = floatShift ? ch.toLowerCase() : ch.toUpperCase();
+    fkInsert(ch);
+  }
+  function fkInsert(text) {
+    const el = floatTarget;
+    if (!el) return;
+    const s = el.selectionStart != null ? el.selectionStart : el.value.length;
+    const e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+    el.setRangeText(text, s, e, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  function fkBackspace() {
+    const el = floatTarget;
+    if (!el) return;
+    let s = el.selectionStart, e = el.selectionEnd;
+    if (s === e) { if (s === 0) return; s = s - 1; }
+    el.setRangeText("", s, e, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  function toggleShift() {
+    floatShift = !floatShift;
+    floatKbKeys.querySelectorAll(".fk-key").forEach((k) => {
+      if (k.dataset.char && /[A-Za-z]/.test(k.dataset.char)) {
+        k.textContent = floatShift ? k.dataset.char.toLowerCase() : k.dataset.char.toUpperCase();
+      }
+    });
+    const sk = floatKbKeys.querySelector(".shift-key");
+    if (sk) sk.classList.toggle("active", floatShift);
+  }
+
+  function showFloatKeyboard(target) {
+    floatTarget = target;
+    floatKeyboard.classList.add("visible");
+  }
+  function hideFloatKeyboard() {
+    floatKeyboard.classList.remove("visible");
+    floatTarget = null;
+  }
+  floatKbClose.onclick = hideFloatKeyboard;
+
+  // Arrastrar el teclado flotante por su barra
+  (function enableFloatDrag() {
+    let dragging = false, offX = 0, offY = 0;
+    floatKbBar.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      const rect = floatKeyboard.getBoundingClientRect();
+      offX = e.clientX - rect.left;
+      offY = e.clientY - rect.top;
+      floatKeyboard.style.transform = "none";
+      floatKeyboard.style.left = rect.left + "px";
+      floatKeyboard.style.top = rect.top + "px";
+      floatKeyboard.style.bottom = "auto";
+      floatKbBar.setPointerCapture(e.pointerId);
+    });
+    floatKbBar.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      let x = e.clientX - offX, y = e.clientY - offY;
+      x = Math.max(0, Math.min(window.innerWidth - floatKeyboard.offsetWidth, x));
+      y = Math.max(0, Math.min(window.innerHeight - floatKeyboard.offsetHeight, y));
+      floatKeyboard.style.left = x + "px";
+      floatKeyboard.style.top = y + "px";
+    });
+    const stop = () => { dragging = false; };
+    floatKbBar.addEventListener("pointerup", stop);
+    floatKbBar.addEventListener("pointercancel", stop);
+  })();
+
+  buildFloatKeyboard();
 
   /* ---------- Arranque ---------- */
   loadDir("");

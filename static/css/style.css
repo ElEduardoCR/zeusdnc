@@ -73,7 +73,37 @@ html, body {
   font-weight: 700;
   margin-bottom: 10px;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.expand-btn {
+  background: #2a3346;
+  border: none;
+  color: #f0f2f5;
+  border-radius: 8px;
+  min-width: 42px;
+  height: 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  flex: none;
+}
+
+.expand-btn:active {
+  background: #3d67e0;
+}
+
+/* Iconos de carpeta / archivo */
+.ficon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.ficon.folder { color: #e0b13a; }
+.ficon.file { color: #6aa9e0; }
 
 .col-action {
   overflow-y: auto;
@@ -389,9 +419,35 @@ body.kb-active .columns {
    misma metrica (fuente, tamaño, interlineado, padding, borde) para que el
    texto quede alineado pixel a pixel. */
 .editor-wrap {
-  position: relative;
+  display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.editor-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Canal de numeros de linea (visible solo en modo expandido) */
+.editor-gutter {
+  flex: none;
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #10141b;
+  border: 1px solid transparent;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  margin: 0;
+  color: #5a6472;
+  font-family: "DejaVu Sans Mono", "Consolas", monospace;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  text-align: right;
+  white-space: pre;
+  user-select: none;
 }
 
 .editor,
@@ -792,6 +848,216 @@ body.kb-active .columns {
   font-size: 0.9rem;
   text-align: left;
 }
+
+/* ---- Modo editor expandido (visor a pantalla grande) ---- */
+.expanded-only { display: none; }
+
+body.content-expanded .columns {
+  grid-template-columns: 2.4fr 1fr;
+}
+
+body.content-expanded .col-files {
+  display: none;
+}
+
+body.content-expanded .expanded-only {
+  display: inline-flex;
+  align-items: center;
+}
+
+body.content-expanded .editor-gutter {
+  width: 54px;
+  padding: 12px 8px;
+}
+
+/* ---- Modal de busqueda de archivos (pantalla completa) ---- */
+.fs-panel {
+  background: #1c2230;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 900px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.fs-header {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+
+.fs-header input {
+  flex: 1;
+  background: #14181f;
+  border: 1px solid #33405a;
+  color: #f0f2f5;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 1.1rem;
+}
+
+.fs-hint {
+  color: #6b7480;
+  font-size: 0.9rem;
+  margin: 10px 2px;
+  flex: none;
+}
+
+.fs-results {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #232b3d;
+  border: 3px solid transparent;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  min-height: 56px;
+}
+
+.fs-row:active {
+  background: #2a3346;
+}
+
+.fs-row .fs-name {
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-row .fs-path {
+  color: #8a94a3;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-row .fs-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.fs-row .fs-size {
+  color: #8a94a3;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* ---- Campos del prompt (renumerar / ir a linea) ---- */
+.prompt-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.prompt-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #9aa4b2;
+}
+
+.prompt-fields input {
+  background: #14181f;
+  border: 1px solid #33405a;
+  color: #f0f2f5;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 1rem;
+}
+
+/* ---- Teclado QWERTY flotante y arrastrable ---- */
+.float-kb {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(680px, 94vw);
+  background: #1c2230;
+  border: 2px solid #33405a;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  padding: 8px;
+}
+
+.float-kb.visible {
+  display: block;
+}
+
+.float-kb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #2a3346;
+  border-radius: 8px;
+  color: #cdd5e0;
+  font-size: 0.85rem;
+  cursor: move;
+  touch-action: none;
+}
+
+.float-kb-bar button {
+  background: #3a4358;
+  border: none;
+  color: #f0f2f5;
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+
+.float-kb-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fk-row {
+  display: flex;
+  gap: 6px;
+}
+
+.fk-key {
+  flex: 1;
+  background: #2a3346;
+  border: none;
+  color: #f0f2f5;
+  border-radius: 8px;
+  min-height: 46px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fk-key:active {
+  background: #3d67e0;
+}
+
+.fk-key.wide { flex: 2; }
+.fk-key.action { background: #33405a; font-size: 0.9rem; }
+.fk-key.active { background: #4d7dff; }
 
 /* ---- Pantallas tactiles bajas (p.ej. 800x480 de 7") ---- */
 @media (max-height: 560px) {
