@@ -1015,6 +1015,12 @@ body.content-expanded .editor-gutter {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   z-index: 40;
   padding: 8px;
+  /* Sin acciones tactiles: evita scroll/zoom del navegador al tocar entre
+     teclas y, combinado con preventDefault en JS, mantiene el foco en el
+     input que estamos editando. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .float-kb.visible {
