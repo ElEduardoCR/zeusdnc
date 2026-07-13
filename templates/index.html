@@ -61,6 +61,13 @@
           <pre class="editor-backdrop" id="editorBackdrop" aria-hidden="true"><code id="editorHighlight"></code></pre>
           <textarea class="editor" id="editor" spellcheck="false" inputmode="none"
             placeholder="Toca un programa a la izquierda para abrirlo, o crea uno con ＋ Nuevo."></textarea>
+          <!-- Overlay de error: aparece cuando el archivo no es texto legible
+               (binario, UTF-16, etc.). Cubre el editor y muestra un mensaje. -->
+          <div class="editor-error" id="editorError" hidden>
+            <div class="editor-error-icon" aria-hidden="true">⚠</div>
+            <div class="editor-error-title" id="editorErrorTitle">Archivo incompatible</div>
+            <div class="editor-error-detail" id="editorErrorDetail">Este archivo no es texto y no se puede mostrar ni editar.</div>
+          </div>
         </div>
       </div>
     </section>

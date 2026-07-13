@@ -75,6 +75,9 @@
   const editorBackdrop = $("editorBackdrop");
   const editorHighlight = $("editorHighlight");
   const editorGutter = $("editorGutter");
+  const editorError = $("editorError");
+  const editorErrorTitle = $("editorErrorTitle");
+  const editorErrorDetail = $("editorErrorDetail");
 
   // Expandir columnas + herramientas avanzadas
   const btnExpandFiles = $("btnExpandFiles");
@@ -247,30 +250,64 @@
     await loadContent();
   }
 
+  // Muestra u oculta el overlay de error del editor. Usado cuando el archivo
+  // no es texto legible (binario, UTF-16, etc.) o dejo de existir.
+  function setEditorError(title, detail) {
+    if (title) {
+      editorErrorTitle.textContent = title;
+      editorErrorDetail.textContent = detail || "";
+      editorError.hidden = false;
+    } else {
+      editorError.hidden = true;
+    }
+  }
+
   async function loadContent() {
     if (!selectedFile) {
       editor.value = "";
       editor.readOnly = false;
       editorFilename.textContent = "Sin archivo";
       editorDirty = false;
+      setEditorError(null);
       updateHighlight();
       updateEditorButtons();
+      updateSendButton();
       return;
     }
     try {
       const res = await fetch("/api/file?path=" + encodeURIComponent(selectedFile.path));
+
+      // Archivo binario o codificado de forma que el editor no puede
+      // mostrar. El backend devuelve 415 con { binary: true, name }.
+      if (res.status === 415) {
+        const data = await res.json().catch(() => ({}));
+        editor.value = "";
+        editor.readOnly = true;
+        editorDirty = false;
+        editorFilename.textContent = (data.name || selectedFile.name) + " — incompatible";
+        setEditorError("Archivo incompatible",
+          "Este archivo no es texto y no se puede mostrar ni editar desde el panel.");
+        updateHighlight();
+        updateEditorButtons();
+        updateSendButton();
+        return;
+      }
+
       if (!res.ok) {
         editor.value = "";
         editor.readOnly = true;
         editorFilename.textContent = selectedFile.name + " (no disponible)";
+        setEditorError("Archivo no disponible", "No se pudo leer el archivo desde la carpeta compartida.");
         updateHighlight();
         updateEditorButtons();
+        updateSendButton();
         return;
       }
       const data = await res.json();
       editor.value = data.content;
       editor.scrollTop = 0;
       editorDirty = false;
+      setEditorError(null);
       if (data.truncated) {
         editor.readOnly = true;
         editorFilename.textContent = data.name + " — muy grande, solo lectura";
@@ -337,6 +374,7 @@
         editor.value = "";
         editor.readOnly = false;
         editorFilename.textContent = "Sin archivo";
+        setEditorError(null);
         updateHighlight();
         setKeyboard(false);
         updateSelectedFileUi();
@@ -638,12 +676,13 @@
   function updateSendButton() {
     let hint = "";
     if (!selectedFile) hint = "Selecciona un programa";
+    else if (editor.readOnly && editorError && !editorError.hidden) hint = "Archivo incompatible — no se puede enviar";
     else if (editorDirty) hint = "Guarda los cambios antes de enviar";
     else if (!selectedMachineId) hint = "Selecciona una máquina";
     else if (!usbConnected) hint = "Conecta el cable RS232";
     else if (sending) hint = "Transferencia en curso...";
 
-    btnSend.disabled = !(selectedFile && !editorDirty && selectedMachineId && usbConnected && !sending);
+    btnSend.disabled = !(selectedFile && !editorDirty && !editor.readOnly && selectedMachineId && usbConnected && !sending);
     sendHint.textContent = hint;
   }
 

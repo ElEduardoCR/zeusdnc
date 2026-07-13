@@ -50,6 +50,10 @@ def api_file():
     data = folder_monitor.read_file(request.args.get("path", ""))
     if data is None:
         return jsonify({"ok": False, "error": "Archivo no encontrado"}), 404
+    if data.get("binary"):
+        # 415 Unsupported Media Type: el archivo existe pero no es texto
+        # leible por el editor. El frontend lo intercepta y muestra un error.
+        return jsonify(data), 415
     return jsonify(data)
 
 

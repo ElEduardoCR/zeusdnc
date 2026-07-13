@@ -25,6 +25,52 @@ _IGNORED_NAMES = {"Thumbs.db", "desktop.ini"}
 MAX_PREVIEW_BYTES = 2 * 1024 * 1024  # tope para la vista de contenido
 
 
+def _looks_binary(data):
+    """Heuristica barata para saber si el archivo es binario. Se miran los
+    primeros 4 KB por:
+
+    1. Byte NUL. latin-1 / utf-8 / cp1252 nunca lo tienen en texto.
+    2. BOM de UTF-16/UTF-32. Es texto, pero el editor (1 columna por
+       'carácter') y el resaltado se confunden, asi que tambien lo
+       bloqueamos.
+    3. Firmas magicas de formatos que NO tienen NUL en los primeros bytes
+       pero claramente no son texto plano: PDF, ZIP/JAR/DOCX/XLSX, RAR,
+       7z, JPEG, GIF.
+    """
+    if not data:
+        return False
+    sample = data[:4096]
+    if b"\x00" in sample:
+        return True
+    if len(sample) >= 4:
+        head2 = sample[:2]
+        if head2 in (b"\xff\xfe", b"\xfe\xff"):
+            return True
+        if sample[:4] in (b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff"):
+            return True
+    head4 = sample[:4]
+    head6 = sample[:6]
+    # PDF: empieza con "%PDF-"
+    if sample[:5] == b"%PDF-":
+        return True
+    # ZIP / JAR / DOCX / XLSX / PPTX / ODT: "PK\x03\x04"
+    if head4[:4] == b"PK\x03\x04":
+        return True
+    # RAR: "Rar!\x1a\x07"
+    if head6 == b"Rar!\x1a\x07":
+        return True
+    # 7-Zip: 0x37 0x7A 0xBC 0xAF 0x27 0x1C
+    if head6 == b"\x37\x7a\xbc\xaf\x27\x1c":
+        return True
+    # JPEG: FF D8 FF
+    if head4[:3] == b"\xff\xd8\xff":
+        return True
+    # GIF87a / GIF89a
+    if sample[:6] in (b"GIF87a", b"GIF89a"):
+        return True
+    return False
+
+
 def _is_ignored(name):
     return name.startswith(".") or name in _IGNORED_NAMES
 
@@ -134,6 +180,18 @@ def read_file(rel_path):
     truncated = len(raw) > MAX_PREVIEW_BYTES
     if truncated:
         raw = raw[:MAX_PREVIEW_BYTES]
+    if _looks_binary(raw):
+        # No intentamos mostrar el contenido: un binario "pasa" por latin-1
+        # pero rompe el editor (caracteres de control, el resaltado entra en
+        # bucles, etc.). Devolvemos un error tipado para que el frontend
+        # muestre 'Archivo incompatible'.
+        return {
+            "ok": False,
+            "error": "Archivo incompatible (no es texto)",
+            "binary": True,
+            "name": os.path.basename(target),
+            "path": _rel(base, target),
+        }
     # latin-1 mapea 1 a 1 cada byte: no falla con G-code/ISO ni binario.
     content = raw.decode("latin-1")
     return {
