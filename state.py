@@ -19,6 +19,7 @@ class AppState:
     def __init__(self):
         self._lock = threading.Lock()
         self.usb_device = None          # p.ej. "/dev/ttyUSB0" o None si no hay cable
+        self.usb_desc = None            # descripcion del adaptador (chip/fabricante)
         self.active_machine_id = None   # se puede elegir aunque no haya cable
         self.files_version = 0          # se incrementa en cada cambio de la carpeta
         self.transfer = dict(_EMPTY_TRANSFER)
@@ -27,21 +28,24 @@ class AppState:
         with self._lock:
             return {
                 "usb_device": self.usb_device,
+                "usb_desc": self.usb_desc,
                 "active_machine_id": self.active_machine_id,
                 "files_version": self.files_version,
                 "transfer": dict(self.transfer),
             }
 
-    def on_usb_add(self, device_path):
+    def on_usb_add(self, device_path, desc=None):
         # Conectar el cable no cambia la maquina elegida: el usuario pudo
         # haberla seleccionado antes de conectar.
         with self._lock:
             self.usb_device = device_path
+            self.usb_desc = desc
 
     def on_usb_remove(self, device_path):
         with self._lock:
             if self.usb_device == device_path:
                 self.usb_device = None
+                self.usb_desc = None
 
     def select_machine(self, machine_id):
         with self._lock:

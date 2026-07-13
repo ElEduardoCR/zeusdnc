@@ -32,6 +32,7 @@ def api_state():
     return jsonify({
         "usb_connected": snap["usb_device"] is not None,
         "usb_device": snap["usb_device"],
+        "usb_desc": snap["usb_desc"],
         "machines": machines,
         "active_machine": active,
         "active_machine_id": snap["active_machine_id"],

@@ -653,11 +653,12 @@
   function renderConnection(s) {
     usbConnected = s.usb_connected;
     if (usbConnected) {
+      const desc = s.usb_desc ? " · " + s.usb_desc : "";
       usbDot.classList.add("connected");
-      usbLabel.textContent = s.usb_device;
+      usbLabel.textContent = s.usb_device + desc;
       alarm.classList.add("ok");
       alarmIcon.textContent = "✓";
-      alarmText.textContent = "Cable RS232 conectado (" + s.usb_device + ")";
+      alarmText.textContent = "Conectado en " + s.usb_device + desc;
     } else {
       usbDot.classList.remove("connected");
       usbLabel.textContent = "Sin adaptador";
