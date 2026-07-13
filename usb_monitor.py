@@ -46,14 +46,11 @@ def _handle_event(action, device):
 def start_usb_monitor():
     context = pyudev.Context()
 
-    # Si el adaptador ya estaba conectado cuando arranco el servicio, lo
-    # tomamos como recien conectado para que el usuario deba confirmar la
-    # maquina de todas formas.
+    # Registrar todos los adaptadores que ya esten conectados al arrancar.
     for device in context.list_devices(subsystem="tty"):
         devnode = device.device_node
         if devnode and USB_TTY_RE.match(devnode):
             state.on_usb_add(devnode, _describe(device))
-            break
 
     monitor = pyudev.Monitor.from_netlink(context)
     monitor.filter_by(subsystem="tty")

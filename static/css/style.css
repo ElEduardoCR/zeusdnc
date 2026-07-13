@@ -554,6 +554,11 @@ body.kb-active .columns {
   border-color: #2ecc71;
 }
 
+.alarm.warn {
+  background: #3a2f14;
+  border-color: #e0a52e;
+}
+
 .alarm-icon {
   font-size: 1.3rem;
   flex: none;
@@ -665,6 +670,15 @@ body.kb-active .columns {
   cursor: not-allowed;
 }
 
+.btn-send.cancel {
+  background: #c0392b;
+  color: #fff;
+}
+
+.btn-send.cancel:active {
+  background: #a83224;
+}
+
 .send-hint {
   color: #9aa4b2;
   font-size: 0.85rem;
@@ -713,6 +727,10 @@ body.kb-active .columns {
 
 .transfer-box.success .progress-fill {
   background: #2ecc71;
+}
+
+.transfer-box.cancelled .progress-fill {
+  background: #e0a52e;
 }
 
 .transfer-detail {

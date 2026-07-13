@@ -39,6 +39,29 @@ CHUNK_SIZE = 256
 
 _transfer_lock = threading.Lock()
 
+# Para cancelar un envio en curso sin apagar ni forzar un error.
+_cancel_event = threading.Event()
+_ser_lock = threading.Lock()
+_current_ser = None
+
+
+class _Cancelled(Exception):
+    pass
+
+
+def request_cancel():
+    """Solicita abortar la transferencia en curso (si la hay). Ademas de
+    marcar el flag, interrumpe una escritura bloqueada (p.ej. la maquina
+    dejo de aceptar datos) con cancel_write()."""
+    _cancel_event.set()
+    with _ser_lock:
+        ser = _current_ser
+    if ser is not None:
+        try:
+            ser.cancel_write()
+        except Exception:  # noqa: BLE001 - best effort
+            pass
+
 
 def _prepare_payload(filepath, terminator):
     with open(filepath, "rb") as f:
@@ -62,6 +85,7 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
     if not _transfer_lock.acquire(blocking=False):
         return False, "Ya hay una transferencia en curso"
 
+    _cancel_event.clear()
     thread = threading.Thread(
         target=_run_transfer,
         args=(device_path, machine_profile, filepath, display_name),
@@ -72,6 +96,7 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
 
 
 def _run_transfer(device_path, profile, filepath, display_name):
+    global _current_ser
     machine_name = profile.get("name", profile.get("id"))
     try:
         terminator = TERMINATOR_MAP[profile["line_terminator"]]
@@ -101,6 +126,8 @@ def _run_transfer(device_path, profile, filepath, display_name):
             timeout=5,
             write_timeout=30,
         ) as ser:
+            with _ser_lock:
+                _current_ser = ser
             # Estado de las lineas DTR/RTS. pyserial las ENCIENDE por defecto
             # al abrir; muchas configuraciones de PC que funcionan las tienen
             # APAGADAS ("Enable DTR/RTS" desmarcados), y algunas maquinas no
@@ -117,6 +144,8 @@ def _run_transfer(device_path, profile, filepath, display_name):
             if total == 0:
                 state.update_transfer(percent=100)
             for i in range(0, total, CHUNK_SIZE):
+                if _cancel_event.is_set():
+                    raise _Cancelled()
                 chunk = payload[i:i + CHUNK_SIZE]
                 # Con xonxoff/rtscts activado, pyserial pausa la escritura
                 # automaticamente hasta que la maquina mande XON (o baje
@@ -141,6 +170,8 @@ def _run_transfer(device_path, profile, filepath, display_name):
             drain_deadline = time.time() + 120
             try:
                 while ser.out_waiting > 0:
+                    if _cancel_event.is_set():
+                        raise _Cancelled()
                     if time.time() > drain_deadline:
                         raise serial.SerialException(
                             "Se agoto el tiempo esperando a que la maquina reciba "
@@ -153,11 +184,20 @@ def _run_transfer(device_path, profile, filepath, display_name):
             time.sleep(0.3)
 
         state.update_transfer(status="success", percent=100, message="Transferencia completada")
+    except _Cancelled:
+        state.update_transfer(status="cancelled", message="Envío cancelado")
     except serial.SerialException as e:
-        state.update_transfer(status="error", message="Error de puerto serial: {}".format(e))
+        # cancel_write() puede hacer que write() lance SerialException; si se
+        # pidio cancelar, lo tratamos como cancelacion, no como error.
+        if _cancel_event.is_set():
+            state.update_transfer(status="cancelled", message="Envío cancelado")
+        else:
+            state.update_transfer(status="error", message="Error de puerto serial: {}".format(e))
     except FileNotFoundError:
         state.update_transfer(status="error", message="El archivo ya no existe en la carpeta compartida")
     except Exception as e:  # noqa: BLE001 - reportar cualquier falla al usuario en pantalla
         state.update_transfer(status="error", message="Error inesperado: {}".format(e))
     finally:
+        with _ser_lock:
+            _current_ser = None
         _transfer_lock.release()

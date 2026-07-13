@@ -34,6 +34,11 @@
   // Envio
   const machineSelectBtn = $("machineSelectBtn");
   const machineSelectLabel = $("machineSelectLabel");
+  const portSelectBtn = $("portSelectBtn");
+  const portSelectLabel = $("portSelectLabel");
+  const portModal = $("portModal");
+  const portModalList = $("portModalList");
+  const btnClosePortModal = $("btnClosePortModal");
   const selectedFileName = $("selectedFileName");
   const btnSend = $("btnSend");
   const sendHint = $("sendHint");
@@ -123,6 +128,9 @@
   let selectedFile = null;      // {path, name}
   let selectedMachineId = null;
   let machines = [];
+  let devices = [];              // [{path, desc}] puertos conectados
+  let activeDevice = null;       // puerto elegido para enviar
+  let activeDeviceDesc = null;
   let usbConnected = false;
   let sending = false;
   let editorDirty = false;
@@ -655,23 +663,81 @@
     updateMachineSelectLabel();
   }
 
-  /* ---------- Alarma / conexion ---------- */
+  /* ---------- Puerto(s) / alarma / conexion ---------- */
   function renderConnection(s) {
-    usbConnected = s.usb_connected;
-    if (usbConnected) {
-      const desc = s.usb_desc ? " · " + s.usb_desc : "";
-      usbDot.classList.add("connected");
-      usbLabel.textContent = s.usb_device + desc;
-      alarm.classList.add("ok");
-      alarmIcon.textContent = "✓";
-      alarmText.textContent = "Conectado en " + s.usb_device + desc;
-    } else {
+    devices = s.usb_devices || [];
+    activeDevice = s.active_device || null;
+    activeDeviceDesc = s.active_device_desc || null;
+    usbConnected = devices.length > 0;
+
+    alarm.classList.remove("ok", "warn");
+    if (!usbConnected) {
       usbDot.classList.remove("connected");
       usbLabel.textContent = "Sin adaptador";
-      alarm.classList.remove("ok");
       alarmIcon.textContent = "⚠";
       alarmText.textContent = "Cable RS232 no conectado";
+    } else if (!activeDevice) {
+      // Varios adaptadores conectados y ninguno elegido todavia.
+      usbDot.classList.add("connected");
+      usbLabel.textContent = devices.length + " adaptadores";
+      alarm.classList.add("warn");
+      alarmIcon.textContent = "⚠";
+      alarmText.textContent = "Elige a qué puerto enviar (" + devices.length + " conectados)";
+    } else {
+      const desc = activeDeviceDesc ? " · " + activeDeviceDesc : "";
+      usbDot.classList.add("connected");
+      usbLabel.textContent = activeDevice + desc;
+      alarm.classList.add("ok");
+      alarmIcon.textContent = "✓";
+      alarmText.textContent = "Conectado en " + activeDevice + desc;
     }
+    updatePortSelectLabel();
+    if (isOpen(portModal)) renderPortModalList();
+  }
+
+  function updatePortSelectLabel() {
+    if (!usbConnected) {
+      portSelectLabel.textContent = "Sin puerto";
+    } else if (activeDevice) {
+      portSelectLabel.textContent = activeDevice + (activeDeviceDesc ? " · " + activeDeviceDesc : "");
+    } else {
+      portSelectLabel.textContent = "Elegir puerto (" + devices.length + ")";
+    }
+  }
+
+  portSelectBtn.onclick = () => { renderPortModalList(); openModal(portModal); };
+  btnClosePortModal.onclick = () => closeModal(portModal);
+
+  function renderPortModalList() {
+    portModalList.innerHTML = "";
+    if (devices.length === 0) {
+      const e = document.createElement("div");
+      e.className = "machine-modal-empty";
+      e.textContent = "No hay adaptadores conectados.";
+      portModalList.appendChild(e);
+      return;
+    }
+    devices.forEach((d) => {
+      const row = document.createElement("div");
+      row.className = "machine-row" + (d.path === activeDevice ? " selected" : "");
+      const pick = document.createElement("button");
+      pick.className = "machine-pick";
+      pick.innerHTML = `<div class="m-name">${esc(d.path)}</div><div class="m-sub">${esc(d.desc || "adaptador USB-serial")}</div>`;
+      pick.onclick = () => selectDevice(d.path);
+      row.appendChild(pick);
+      portModalList.appendChild(row);
+    });
+  }
+
+  async function selectDevice(path) {
+    await fetch("/api/device/select", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    activeDevice = path;
+    updatePortSelectLabel();
+    updateSendButton();
+    closeModal(portModal);
   }
 
   /* ---------- Envio ---------- */
@@ -681,19 +747,39 @@
   }
 
   function updateSendButton() {
+    // Mientras transmite, el mismo boton sirve para CANCELAR.
+    if (sending) {
+      btnSend.textContent = "CANCELAR";
+      btnSend.classList.add("cancel");
+      btnSend.disabled = false;
+      sendHint.textContent = "Enviando… toca para cancelar";
+      return;
+    }
+    btnSend.textContent = "ENVIAR";
+    btnSend.classList.remove("cancel");
+
     let hint = "";
     if (!selectedFile) hint = "Selecciona un programa";
     else if (editor.readOnly && editorError && !editorError.hidden) hint = "Archivo incompatible — no se puede enviar";
     else if (editorDirty) hint = "Guarda los cambios antes de enviar";
     else if (!selectedMachineId) hint = "Selecciona una máquina";
     else if (!usbConnected) hint = "Conecta el cable RS232";
-    else if (sending) hint = "Transferencia en curso...";
+    else if (!activeDevice) hint = "Elige a qué puerto enviar";
 
-    btnSend.disabled = !(selectedFile && !editorDirty && !editor.readOnly && selectedMachineId && usbConnected && !sending);
+    btnSend.disabled = !(selectedFile && !editorDirty && !editor.readOnly && selectedMachineId && usbConnected && activeDevice);
     sendHint.textContent = hint;
   }
 
   btnSend.onclick = () => {
+    if (sending) {           // en curso -> cancelar
+      confirmAction(
+        "Cancelar envío",
+        "¿Cancelar la transferencia en curso? La máquina puede quedar con el programa incompleto.",
+        "Cancelar envío", true,
+        cancelSend
+      );
+      return;
+    }
     if (btnSend.disabled) return;
     confirmAction(
       "Confirmar envío",
@@ -713,9 +799,14 @@
     poll();
   }
 
+  async function cancelSend() {
+    try { await fetch("/api/send/cancel", { method: "POST" }); } catch (e) { /* noop */ }
+    poll();
+  }
+
   function renderTransfer(t) {
     sending = t.status === "sending";
-    transferBox.classList.remove("error", "success");
+    transferBox.classList.remove("error", "success", "cancelled");
     if (t.status === "idle") {
       transferBox.classList.remove("visible");
       return;
@@ -729,6 +820,10 @@
       transferBox.classList.add("success");
       transferTitle.textContent = `Envío completado: ${t.filename}`;
       transferDetail.textContent = t.message || "Transferencia exitosa";
+    } else if (t.status === "cancelled") {
+      transferBox.classList.add("cancelled");
+      transferTitle.textContent = `Envío cancelado: ${t.filename || ""}`;
+      transferDetail.textContent = t.message || "Cancelado por el usuario";
     } else if (t.status === "error") {
       transferBox.classList.add("error");
       transferTitle.textContent = `Error enviando ${t.filename || ""}`;

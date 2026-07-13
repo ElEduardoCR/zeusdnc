@@ -30,15 +30,24 @@ def api_state():
         active = next((m for m in machines if m["id"] == snap["active_machine_id"]), None)
 
     return jsonify({
-        "usb_connected": snap["usb_device"] is not None,
-        "usb_device": snap["usb_device"],
-        "usb_desc": snap["usb_desc"],
+        "usb_connected": len(snap["usb_devices"]) > 0,
+        "usb_devices": snap["usb_devices"],
+        "active_device": snap["active_device"],
+        "active_device_desc": snap["active_device_desc"],
         "machines": machines,
         "active_machine": active,
         "active_machine_id": snap["active_machine_id"],
         "files_version": snap["files_version"],
         "transfer": snap["transfer"],
     })
+
+
+@app.route("/api/device/select", methods=["POST"])
+def api_device_select():
+    data = request.get_json(force=True, silent=True) or {}
+    if not state.select_device(data.get("path")):
+        return jsonify({"ok": False, "error": "Puerto no disponible"}), 409
+    return jsonify({"ok": True})
 
 
 @app.route("/api/files")
@@ -136,8 +145,10 @@ def api_machine_clear():
 @app.route("/api/send", methods=["POST"])
 def api_send():
     snap = state.snapshot()
-    if not snap["usb_device"]:
+    if not snap["usb_devices"]:
         return jsonify({"ok": False, "error": "Cable RS232 no conectado"}), 409
+    if not snap["active_device"]:
+        return jsonify({"ok": False, "error": "Elige a que puerto enviar"}), 409
     if not snap["active_machine_id"]:
         return jsonify({"ok": False, "error": "Selecciona una maquina antes de enviar"}), 409
     if snap["transfer"]["status"] == "sending":
@@ -155,10 +166,16 @@ def api_send():
 
     state.reset_transfer()
     ok, err = serial_transfer.start_transfer(
-        snap["usb_device"], profile, abs_path, os.path.basename(abs_path)
+        snap["active_device"], profile, abs_path, os.path.basename(abs_path)
     )
     if not ok:
         return jsonify({"ok": False, "error": err}), 409
+    return jsonify({"ok": True})
+
+
+@app.route("/api/send/cancel", methods=["POST"])
+def api_send_cancel():
+    serial_transfer.request_cancel()
     return jsonify({"ok": True})
 
 

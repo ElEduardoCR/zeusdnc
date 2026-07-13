@@ -94,6 +94,12 @@
         <span id="alarmText">Cable RS232 no conectado</span>
       </div>
 
+      <div class="section-label">Puerto</div>
+      <button class="machine-select-btn" id="portSelectBtn">
+        <span id="portSelectLabel">—</span>
+        <span class="chev">▾</span>
+      </button>
+
       <div class="section-label">Máquina</div>
       <button class="machine-select-btn" id="machineSelectBtn">
         <span id="machineSelectLabel">Seleccionar máquina</span>
@@ -119,6 +125,17 @@
     </section>
 
   </main>
+
+  <!-- Modal: elegir puerto serial (cuando hay varios adaptadores) -->
+  <div id="portModal" class="modal-overlay">
+    <div class="modal-box wide">
+      <h2>Puerto serial</h2>
+      <div class="machine-modal-list" id="portModalList"></div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="btnClosePortModal">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: lista/administracion de maquinas -->
   <div id="machineModal" class="modal-overlay">
