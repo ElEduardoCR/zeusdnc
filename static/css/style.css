@@ -496,6 +496,44 @@ body.kb-active .columns {
   border-color: #4d7dff;
 }
 
+/* Overlay de error: cubre el editor cuando el archivo no es texto. */
+.editor-error {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #2a1a1a;
+  border: 2px solid #c0392b;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  gap: 10px;
+  color: #f0f2f5;
+}
+
+.editor-error[hidden] {
+  display: none;
+}
+
+.editor-error-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.editor-error-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.editor-error-detail {
+  color: #d8b0a8;
+  font-size: 0.95rem;
+  max-width: 360px;
+}
+
 /* ---- Columna derecha: envio ---- */
 .alarm {
   display: flex;
