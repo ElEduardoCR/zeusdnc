@@ -6,6 +6,7 @@ manda el archivo completo respetando el control de flujo del perfil, y se
 cierra.
 """
 import threading
+import time
 
 import serial
 
@@ -116,6 +117,28 @@ def _run_transfer(device_path, profile, filepath, display_name):
                 sent += len(chunk)
                 percent = int(sent * 100 / total) if total else 100
                 state.update_transfer(bytes_sent=sent, percent=percent)
+
+            # IMPORTANTE: write() solo mete los bytes al buffer del sistema y
+            # del adaptador; regresa al instante. Si cerramos el puerto aqui,
+            # a baja velocidad (4800/9600) se descarta lo que aun no salio
+            # fisicamente y la maquina no recibe (o recibe incompleto). Por eso
+            # esperamos a que el buffer de salida se vacie antes de cerrar.
+            # Se usa out_waiting + sleep (no tcdrain) para no congelar la app y
+            # poder poner un timeout si la maquina se queda en XOFF.
+            state.update_transfer(message="Finalizando envio...")
+            drain_deadline = time.time() + 120
+            try:
+                while ser.out_waiting > 0:
+                    if time.time() > drain_deadline:
+                        raise serial.SerialException(
+                            "Se agoto el tiempo esperando a que la maquina reciba "
+                            "(¿esta en modo recepcion? ¿control de flujo/cable correctos?)"
+                        )
+                    time.sleep(0.05)
+            except (OSError, ValueError):
+                pass  # algunos drivers no reportan out_waiting; seguimos
+            # margen para que el FIFO interno del adaptador USB termine de salir
+            time.sleep(0.3)
 
         state.update_transfer(status="success", percent=100, message="Transferencia completada")
     except serial.SerialException as e:
