@@ -89,6 +89,7 @@
   const fsClose = $("fsClose");
   const fsHint = $("fsHint");
   const fsResults = $("fsResults");
+  const fsBreadcrumb = $("fsBreadcrumb");
 
   // Prompt generico (renumerar / ir a linea)
   const promptModal = $("promptModal");
@@ -314,7 +315,7 @@
     updateEditorButtons();
     updateSendButton();
     const prev = btnSave.textContent;
-    btnSave.textContent = "Guardado ✓";
+    btnSave.textContent = "✓";
     setTimeout(() => { btnSave.textContent = prev; }, 1200);
   }
 
@@ -354,9 +355,10 @@
     newFileName.value = "";
     newFileError.textContent = "";
     openModal(newFileModal);
+    showFloatKeyboard(newFileName);
     setTimeout(() => newFileName.focus(), 50);
   };
-  btnCancelNewFile.onclick = () => closeModal(newFileModal);
+  btnCancelNewFile.onclick = () => { closeModal(newFileModal); hideFloatKeyboard(); };
   btnCreateNewFile.onclick = async () => {
     const name = newFileName.value.trim();
     if (!name) { newFileError.textContent = "Escribe un nombre"; return; }
@@ -367,6 +369,7 @@
     const data = await res.json();
     if (!data.ok) { newFileError.textContent = data.error || "No se pudo crear"; return; }
     closeModal(newFileModal);
+    hideFloatKeyboard();
     await loadDir(currentPath);
     selectedFile = { path: data.path, name };
     editorDirty = false;
@@ -557,7 +560,7 @@
   }
 
   btnAddMachine.onclick = () => openMachineEdit(null);
-  btnCancelMachineEdit.onclick = () => closeModal(machineEditModal);
+  btnCancelMachineEdit.onclick = () => { closeModal(machineEditModal); hideFloatKeyboard(); };
 
   btnSaveMachineEdit.onclick = async () => {
     const payload = {
@@ -577,6 +580,7 @@
     const data = await res.json();
     if (!data.ok) { mfError.textContent = data.error || "No se pudo guardar"; return; }
     closeModal(machineEditModal);
+    hideFloatKeyboard();
     await refreshMachines();
     if (isOpen(machineModal)) renderMachineModalList();
   };
@@ -1007,34 +1011,85 @@
     promptCb = null;
   };
 
-  /* ---------- Buscador de archivos (columna de archivos expandida) ---------- */
+  /* ---------- Buscador / navegador de archivos (columna expandida) ---------- */
   let fsTimer = null;
+  let fsPath = "";
   btnExpandFiles.onclick = () => {
     fsSearch.value = "";
-    fsResults.innerHTML = "";
-    fsHint.style.display = "";
-    fsHint.textContent = "Escribe para buscar en todas las carpetas.";
+    fsPath = currentPath;      // arranca en la carpeta que ya se veia
     openModal(fileSearchModal);
+    fsBrowse(fsPath);
     setTimeout(() => fsSearch.focus(), 50);
   };
   fsClose.onclick = () => { closeModal(fileSearchModal); hideFloatKeyboard(); };
   fsSearch.addEventListener("focus", () => showFloatKeyboard(fsSearch));
   fsSearch.addEventListener("input", () => {
     clearTimeout(fsTimer);
-    fsTimer = setTimeout(doFileSearch, 200);
+    fsTimer = setTimeout(fsUpdate, 200);
   });
 
-  async function doFileSearch() {
-    const q = fsSearch.value.trim();
-    if (!q) {
-      fsResults.innerHTML = "";
+  function fsUpdate() {
+    if (fsSearch.value.trim()) doFileSearch();
+    else fsBrowse(fsPath);
+  }
+
+  // Modo navegacion: muestra carpetas y archivos de una carpeta, navegable.
+  async function fsBrowse(path) {
+    let data;
+    try { data = await (await fetch("/api/files?path=" + encodeURIComponent(path))).json(); }
+    catch (e) { return; }
+    fsPath = data.path;
+    fsBreadcrumb.style.display = "";
+    fsHint.style.display = "none";
+    renderFsBreadcrumb(data.breadcrumb);
+
+    fsResults.innerHTML = "";
+    if (data.dirs.length === 0 && data.files.length === 0) {
       fsHint.style.display = "";
-      fsHint.textContent = "Escribe para buscar en todas las carpetas.";
+      fsHint.textContent = "Carpeta vacía.";
       return;
     }
+    data.dirs.forEach((d) => {
+      const row = document.createElement("div");
+      row.className = "fs-row";
+      row.innerHTML = `${ICON_FOLDER}<div class="fs-col"><div class="fs-name">${esc(d.name)}</div></div><div class="fs-size">›</div>`;
+      row.onclick = () => fsBrowse(d.path);
+      fsResults.appendChild(row);
+    });
+    data.files.forEach((f) => {
+      const row = document.createElement("div");
+      row.className = "fs-row";
+      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(f.name)}</div></div><div class="fs-size">${formatSize(f.size)}</div>`;
+      row.onclick = () => pickSearchResult({ path: f.path, name: f.name, dir: fsPath, size: f.size });
+      fsResults.appendChild(row);
+    });
+  }
+
+  function renderFsBreadcrumb(crumbs) {
+    fsBreadcrumb.innerHTML = "";
+    crumbs.forEach((c, i) => {
+      if (i > 0) {
+        const sep = document.createElement("span");
+        sep.className = "crumb-sep";
+        sep.textContent = "›";
+        fsBreadcrumb.appendChild(sep);
+      }
+      const btn = document.createElement("button");
+      btn.className = "crumb" + (i === crumbs.length - 1 ? " current" : "");
+      btn.textContent = c.name;
+      if (i !== crumbs.length - 1) btn.onclick = () => fsBrowse(c.path);
+      fsBreadcrumb.appendChild(btn);
+    });
+  }
+
+  // Modo busqueda: resultados recursivos por nombre en todas las carpetas.
+  async function doFileSearch() {
+    const q = fsSearch.value.trim();
+    if (!q) { fsBrowse(fsPath); return; }
     let results;
     try { results = await (await fetch("/api/search?q=" + encodeURIComponent(q))).json(); }
     catch (e) { return; }
+    fsBreadcrumb.style.display = "none";
     renderSearchResults(results);
   }
 
@@ -1113,8 +1168,17 @@
     r.appendChild(mk(".", "", () => fkInsert(".")));
     r.appendChild(mk("espacio", "wide", () => fkInsert(" ")));
     r.appendChild(mk("⌫", "action", fkBackspace));
-    r.appendChild(mk("↵", "action", hideFloatKeyboard));
+    r.appendChild(mk("↵", "action", fkEnter));
     floatKbKeys.appendChild(r);
+  }
+
+  // El Enter del teclado flotante envia el formulario del modal activo
+  // (asi no hay que alcanzar el boton si el teclado lo tapa).
+  function fkEnter() {
+    if (floatTarget === newFileName) { btnCreateNewFile.click(); return; }
+    if (floatTarget === mfName) { btnSaveMachineEdit.click(); return; }
+    if (floatTarget && floatTarget.closest && floatTarget.closest("#promptModal")) { btnPromptOk.click(); return; }
+    hideFloatKeyboard();
   }
 
   function fkPress(ch) {
@@ -1151,9 +1215,11 @@
   function showFloatKeyboard(target) {
     floatTarget = target;
     floatKeyboard.classList.add("visible");
+    document.body.classList.add("float-kb-active");
   }
   function hideFloatKeyboard() {
     floatKeyboard.classList.remove("visible");
+    document.body.classList.remove("float-kb-active");
     floatTarget = null;
   }
   floatKbClose.onclick = hideFloatKeyboard;
@@ -1186,6 +1252,11 @@
   })();
 
   buildFloatKeyboard();
+
+  // Campos de nombre (modales) que usan el teclado flotante
+  [newFileName, mfName].forEach((inp) => {
+    inp.addEventListener("focus", () => showFloatKeyboard(inp));
+  });
 
   /* ---------- Arranque ---------- */
   loadDir("");

@@ -345,8 +345,11 @@ body.kb-active .columns {
 
 .editor-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  flex: none;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tbtn {
@@ -999,6 +1002,16 @@ body.content-expanded .editor-gutter {
 
 .float-kb.visible {
   display: block;
+}
+
+/* Con el teclado flotante abajo, los modales se pegan arriba para no
+   quedar tapados por el teclado. */
+body.float-kb-active .modal-overlay {
+  align-items: flex-start;
+}
+
+body.float-kb-active .modal-box {
+  margin-top: 16px;
 }
 
 .float-kb-bar {

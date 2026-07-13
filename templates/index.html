@@ -32,14 +32,14 @@
       <div class="editor-toolbar">
         <span class="editor-filename" id="editorFilename">Sin archivo</span>
         <div class="editor-actions">
-          <button class="tbtn" id="btnNew">＋ Nuevo</button>
-          <button class="tbtn" id="btnFind">🔍</button>
-          <button class="tbtn" id="btnKeyboard">⌨ Teclado</button>
+          <button class="tbtn" id="btnNew" title="Nuevo programa">＋</button>
+          <button class="tbtn" id="btnFind" title="Buscar / reemplazar">🔍</button>
+          <button class="tbtn" id="btnKeyboard" title="Teclado G-code">⌨</button>
           <button class="tbtn expanded-only" id="btnRenumber">N° Renumerar</button>
           <button class="tbtn expanded-only" id="btnStripN">Quitar N°</button>
           <button class="tbtn expanded-only" id="btnGotoLine">Ir a línea</button>
-          <button class="tbtn" id="btnSave" disabled>💾 Guardar</button>
-          <button class="tbtn danger" id="btnDeleteFile" disabled>🗑</button>
+          <button class="tbtn" id="btnSave" title="Guardar" disabled>💾</button>
+          <button class="tbtn danger" id="btnDeleteFile" title="Eliminar" disabled>🗑</button>
           <button class="expand-btn" id="btnExpandEditor" title="Expandir editor">⤢</button>
         </div>
       </div>
@@ -131,7 +131,7 @@
       <h2 id="machineEditTitle">Nueva máquina</h2>
       <div class="form-grid">
         <label>Nombre
-          <input type="text" id="mfName" autocomplete="off">
+          <input type="text" id="mfName" autocomplete="off" inputmode="none">
         </label>
         <label>Baudrate
           <select id="mfBaud">
@@ -188,7 +188,7 @@
     <div class="modal-box">
       <h2>Nuevo programa</h2>
       <p class="modal-sub" id="newFileDirHint"></p>
-      <input type="text" id="newFileName" placeholder="nombre.nc" autocomplete="off" spellcheck="false">
+      <input type="text" id="newFileName" placeholder="nombre.nc" autocomplete="off" spellcheck="false" inputmode="none">
       <div class="form-error" id="newFileError"></div>
       <div class="modal-buttons">
         <button class="btn btn-secondary" id="btnCancelNewFile">Cancelar</button>
@@ -216,6 +216,7 @@
         <input type="text" id="fsSearch" placeholder="Buscar archivo por nombre..." autocomplete="off" spellcheck="false" inputmode="none">
         <button class="btn btn-secondary" id="fsClose">Cerrar</button>
       </div>
+      <div class="breadcrumb fs-breadcrumb" id="fsBreadcrumb"></div>
       <div class="fs-hint" id="fsHint">Escribe para buscar en todas las carpetas.</div>
       <div class="fs-results" id="fsResults"></div>
     </div>
