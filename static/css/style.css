@@ -882,6 +882,20 @@ body.kb-active .columns {
   margin-top: 6px;
 }
 
+.form-grid label.check-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  color: #f0f2f5;
+  font-size: 1rem;
+}
+
+.form-grid label.check-label input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
 .form-error {
   color: #ff7a6b;
   min-height: 1.1em;

@@ -101,6 +101,18 @@ def _run_transfer(device_path, profile, filepath, display_name):
             timeout=5,
             write_timeout=30,
         ) as ser:
+            # Estado de las lineas DTR/RTS. pyserial las ENCIENDE por defecto
+            # al abrir; muchas configuraciones de PC que funcionan las tienen
+            # APAGADAS ("Enable DTR/RTS" desmarcados), y algunas maquinas no
+            # aceptan datos si no coinciden. Por defecto las dejamos apagadas
+            # (igual que esa config); se pueden encender por perfil.
+            try:
+                ser.dtr = bool(profile.get("dtr", False))
+                if flow != "rtscts":   # en rtscts la RTS la maneja el driver
+                    ser.rts = bool(profile.get("rts", False))
+            except (OSError, ValueError):
+                pass
+
             sent = 0
             if total == 0:
                 state.update_transfer(percent=100)

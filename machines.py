@@ -89,6 +89,8 @@ def validate_machine(data):
         "stopbits": stopbits,
         "flow_control": flow,
         "line_terminator": term,
+        "dtr": bool(data.get("dtr", False)),
+        "rts": bool(data.get("rts", False)),
     }, None
 
 

@@ -56,6 +56,8 @@
   const mfStop = $("mfStop");
   const mfFlow = $("mfFlow");
   const mfTerm = $("mfTerm");
+  const mfDtr = $("mfDtr");
+  const mfRts = $("mfRts");
   const mfError = $("mfError");
   const btnCancelMachineEdit = $("btnCancelMachineEdit");
   const btnSaveMachineEdit = $("btnSaveMachineEdit");
@@ -593,6 +595,8 @@
     mfStop.value = String(m ? m.stopbits : 1);
     mfFlow.value = m ? m.flow_control : "xonxoff";
     mfTerm.value = m ? m.line_terminator : "CRLF";
+    mfDtr.checked = m ? !!m.dtr : false;
+    mfRts.checked = m ? !!m.rts : false;
     mfError.textContent = "";
     openModal(machineEditModal);
   }
@@ -609,6 +613,8 @@
       stopbits: mfStop.value,
       flow_control: mfFlow.value,
       line_terminator: mfTerm.value,
+      dtr: mfDtr.checked,
+      rts: mfRts.checked,
     };
     if (editingMachineId) payload.id = editingMachineId;
     const res = await fetch("/api/machine/save", {
