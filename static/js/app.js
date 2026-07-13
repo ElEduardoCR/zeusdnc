@@ -1019,9 +1019,28 @@
     fsPath = currentPath;      // arranca en la carpeta que ya se veia
     openModal(fileSearchModal);
     fsBrowse(fsPath);
-    setTimeout(() => fsSearch.focus(), 50);
+    // Estilo Finder: el explorador navegable aparece primero. El input de
+    // busqueda NO se enfoca solo, asi no se abre el teclado flotante sin
+    // que el usuario lo pida. Si quiere buscar, toca el input.
   };
-  fsClose.onclick = () => { closeModal(fileSearchModal); hideFloatKeyboard(); };
+
+  // Cierra el modal de busqueda y, con el, el teclado flotante (por si
+  // estaba abierto). Usado por el boton Cerrar y por el click fuera del panel.
+  function closeFileSearchModal() {
+    closeModal(fileSearchModal);
+    hideFloatKeyboard();
+  }
+  fsClose.onclick = closeFileSearchModal;
+
+  // Click fuera del panel (sobre el overlay oscuro) cierra el modal.
+  fileSearchModal.addEventListener("click", (e) => {
+    if (e.target === fileSearchModal) closeFileSearchModal();
+  });
+
+  // ESC tambien cierra el modal (y el teclado, por si quedo abierto).
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen(fileSearchModal)) closeFileSearchModal();
+  });
   fsSearch.addEventListener("focus", () => showFloatKeyboard(fsSearch));
   fsSearch.addEventListener("input", () => {
     clearTimeout(fsTimer);
@@ -1228,6 +1247,10 @@
   (function enableFloatDrag() {
     let dragging = false, offX = 0, offY = 0;
     floatKbBar.addEventListener("pointerdown", (e) => {
+      // Si el pointerdown ocurre en el boton de cerrar (o cualquier hijo),
+      // NO iniciar el arrastre: el setPointerCapture de la barra se comería
+      // el click del boton y la X no cerraria el teclado.
+      if (e.target.closest("#floatKbClose")) return;
       dragging = true;
       const rect = floatKeyboard.getBoundingClientRect();
       offX = e.clientX - rect.left;

@@ -213,11 +213,14 @@
   <div id="fileSearchModal" class="modal-overlay">
     <div class="fs-panel">
       <div class="fs-header">
-        <input type="text" id="fsSearch" placeholder="Buscar archivo por nombre..." autocomplete="off" spellcheck="false" inputmode="none">
+        <div class="fs-title">Explorador de programas</div>
         <button class="btn btn-secondary" id="fsClose">Cerrar</button>
       </div>
       <div class="breadcrumb fs-breadcrumb" id="fsBreadcrumb"></div>
-      <div class="fs-hint" id="fsHint">Escribe para buscar en todas las carpetas.</div>
+      <div class="fs-search-row">
+        <input type="text" id="fsSearch" placeholder="🔍 Buscar en todas las carpetas..." autocomplete="off" spellcheck="false" inputmode="none">
+      </div>
+      <div class="fs-hint" id="fsHint">Toca una carpeta para entrar. Escribe en el buscador para filtrar en todo el árbol.</div>
       <div class="fs-results" id="fsResults"></div>
     </div>
   </div>
