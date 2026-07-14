@@ -599,6 +599,26 @@ body.kb-active .columns {
   flex: none;
 }
 
+/* Textos largos (puerto+adaptador, nombre de archivo, etc.) NO deben
+   agrandar botones/alarma/listas de la 3a columna: una sola linea, con
+   puntos suspensivos si no cabe. */
+.machine-select-btn > span:not(.chev),
+#alarmText {
+  flex: 1;
+  text-align: left;
+}
+
+.machine-select-btn > span:not(.chev),
+#alarmText,
+.selected-file-name,
+.machine-row .m-name,
+.machine-row .m-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .selected-file-card {
   background: #232b3d;
   border-radius: 10px;
