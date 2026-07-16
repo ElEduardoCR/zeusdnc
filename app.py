@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, request
 import folder_monitor
 import serial_transfer
 import usb_monitor
+import system_info
 from machines import delete_machine, get_machine, load_machines, save_machine
 from state import state
 
@@ -39,7 +40,30 @@ def api_state():
         "active_machine_id": snap["active_machine_id"],
         "files_version": snap["files_version"],
         "transfer": snap["transfer"],
+        "ip": system_info.get_ip_cached(),
     })
+
+
+@app.route("/api/wifi/status")
+def api_wifi_status():
+    return jsonify(system_info.wifi_status())
+
+
+@app.route("/api/wifi/scan")
+def api_wifi_scan():
+    return jsonify(system_info.wifi_scan())
+
+
+@app.route("/api/wifi/connect", methods=["POST"])
+def api_wifi_connect():
+    data = request.get_json(force=True, silent=True) or {}
+    ssid = data.get("ssid")
+    if not ssid:
+        return jsonify({"ok": False, "error": "Falta el nombre de la red (SSID)"}), 400
+    ok, err = system_info.wifi_connect(ssid, data.get("password", ""))
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True})
 
 
 @app.route("/api/device/select", methods=["POST"])

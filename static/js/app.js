@@ -4,11 +4,19 @@
   const $ = (id) => document.getElementById(id);
 
   // Cabecera / conexion
-  const usbDot = $("usbDot");
-  const usbLabel = $("usbLabel");
+  const ipBadge = $("ipBadge");
   const alarm = $("alarm");
   const alarmIcon = $("alarmIcon");
   const alarmText = $("alarmText");
+
+  // WiFi
+  const btnWifi = $("btnWifi");
+  const wifiModal = $("wifiModal");
+  const wifiCurrent = $("wifiCurrent");
+  const btnWifiScan = $("btnWifiScan");
+  const wifiList = $("wifiList");
+  const wifiError = $("wifiError");
+  const btnCloseWifi = $("btnCloseWifi");
 
   // Explorador
   const breadcrumbEl = $("breadcrumb");
@@ -156,6 +164,13 @@
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  function formatDateTime(sec) {
+    if (!sec) return "";
+    const d = new Date(sec * 1000);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
   function machineSubLabel(m) {
     const flow = m.flow_control === "xonxoff" ? "XON/XOFF" : "RTS/CTS";
     const term = m.line_terminator === "CRLF" ? "CR+LF" : m.line_terminator;
@@ -226,7 +241,7 @@
       const row = document.createElement("div");
       row.className = "entry file" + (selectedFile && selectedFile.path === f.path ? " selected" : "");
       row.dataset.path = f.path;
-      row.innerHTML = `${ICON_FILE}<span class="entry-name">${esc(f.name)}</span><span class="entry-size">${formatSize(f.size)}</span>`;
+      row.innerHTML = `${ICON_FILE}<span class="entry-name">${esc(f.name)}</span><span class="entry-meta"><span class="entry-date">${formatDateTime(f.mtime)}</span><span class="entry-size">${formatSize(f.size)}</span></span>`;
       row.onclick = () => selectFile(f);
       browserEl.appendChild(row);
     });
@@ -672,21 +687,15 @@
 
     alarm.classList.remove("ok", "warn");
     if (!usbConnected) {
-      usbDot.classList.remove("connected");
-      usbLabel.textContent = "Sin adaptador";
       alarmIcon.textContent = "⚠";
       alarmText.textContent = "Cable RS232 no conectado";
     } else if (!activeDevice) {
       // Varios adaptadores conectados y ninguno elegido todavia.
-      usbDot.classList.add("connected");
-      usbLabel.textContent = devices.length + " adaptadores";
       alarm.classList.add("warn");
       alarmIcon.textContent = "⚠";
       alarmText.textContent = "Elige a qué puerto enviar (" + devices.length + " conectados)";
     } else {
       const desc = activeDeviceDesc ? " · " + activeDeviceDesc : "";
-      usbDot.classList.add("connected");
-      usbLabel.textContent = activeDevice + desc;
       alarm.classList.add("ok");
       alarmIcon.textContent = "✓";
       alarmText.textContent = "Conectado en " + activeDevice + desc;
@@ -835,10 +844,11 @@
   async function poll() {
     let s;
     try { s = await (await fetch("/api/state")).json(); }
-    catch (e) { usbLabel.textContent = "Sin conexión al backend"; return; }
+    catch (e) { ipBadge.textContent = "Sin conexión"; return; }
 
     machines = s.machines;
     selectedMachineId = s.active_machine_id || null;
+    ipBadge.textContent = s.ip ? "IP: " + s.ip : "IP: —";
     renderConnection(s);
     updateMachineSelectLabel();
     if (isOpen(machineModal)) renderMachineModalList();
@@ -1219,7 +1229,7 @@
     data.files.forEach((f) => {
       const row = document.createElement("div");
       row.className = "fs-row";
-      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(f.name)}</div></div><div class="fs-size">${formatSize(f.size)}</div>`;
+      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(f.name)}</div><div class="fs-path">${formatDateTime(f.mtime)}</div></div><div class="fs-size">${formatSize(f.size)}</div>`;
       row.onclick = () => pickSearchResult({ path: f.path, name: f.name, dir: fsPath, size: f.size });
       fsResults.appendChild(row);
     });
@@ -1265,7 +1275,7 @@
       const row = document.createElement("div");
       row.className = "fs-row";
       const folder = r.dir ? r.dir : "Programas";
-      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(r.name)}</div><div class="fs-path">📁 ${esc(folder)}</div></div><div class="fs-size">${formatSize(r.size)}</div>`;
+      row.innerHTML = `${ICON_FILE}<div class="fs-col"><div class="fs-name">${esc(r.name)}</div><div class="fs-path">📁 ${esc(folder)} · ${formatDateTime(r.mtime)}</div></div><div class="fs-size">${formatSize(r.size)}</div>`;
       row.onclick = () => pickSearchResult(r);
       fsResults.appendChild(row);
     });
@@ -1452,6 +1462,75 @@
   [newFileName, mfName].forEach((inp) => {
     inp.addEventListener("focus", () => showFloatKeyboard(inp));
   });
+
+  /* ---------- WiFi ---------- */
+  btnWifi.onclick = () => {
+    wifiError.textContent = "";
+    openModal(wifiModal);
+    refreshWifiStatus();
+    scanWifi();
+  };
+  btnCloseWifi.onclick = () => { closeModal(wifiModal); hideFloatKeyboard(); };
+  btnWifiScan.onclick = scanWifi;
+
+  async function refreshWifiStatus() {
+    try {
+      const s = await (await fetch("/api/wifi/status")).json();
+      wifiCurrent.textContent = s.ssid
+        ? "Conectado a: " + s.ssid + (s.ip ? " (" + s.ip + ")" : "")
+        : "Sin red WiFi";
+    } catch (e) { /* noop */ }
+  }
+
+  async function scanWifi() {
+    wifiList.innerHTML = '<div class="wifi-loading">Buscando redes…</div>';
+    let nets;
+    try { nets = await (await fetch("/api/wifi/scan")).json(); }
+    catch (e) { wifiList.innerHTML = '<div class="wifi-loading">No se pudo buscar redes.</div>'; return; }
+    renderWifiList(nets);
+  }
+
+  function renderWifiList(nets) {
+    wifiList.innerHTML = "";
+    if (!nets || nets.length === 0) {
+      wifiList.innerHTML = '<div class="wifi-loading">No se encontraron redes.</div>';
+      return;
+    }
+    nets.forEach((n) => {
+      const row = document.createElement("div");
+      row.className = "wifi-row";
+      const lock = n.secure ? "🔒 " : "";
+      row.innerHTML = `<span class="wifi-ssid">${lock}${esc(n.ssid)}</span><span class="wifi-sig">${n.signal}%</span>`;
+      row.onclick = () => connectToNetwork(n);
+      wifiList.appendChild(row);
+    });
+  }
+
+  function connectToNetwork(n) {
+    if (n.secure) {
+      openPrompt("Contraseña de " + n.ssid, [{ id: "pass", label: "Contraseña" }], (v) => {
+        if (!v.pass) return "Escribe la contraseña";
+        doWifiConnect(n.ssid, v.pass);
+      });
+    } else {
+      doWifiConnect(n.ssid, "");
+    }
+  }
+
+  async function doWifiConnect(ssid, password) {
+    wifiError.textContent = "Conectando a " + ssid + "…";
+    let data;
+    try {
+      const res = await fetch("/api/wifi/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ssid, password }),
+      });
+      data = await res.json();
+    } catch (e) { wifiError.textContent = "No se pudo conectar (sin respuesta)"; return; }
+    if (!data.ok) { wifiError.textContent = data.error || "No se pudo conectar"; return; }
+    wifiError.textContent = "Conectado ✓";
+    refreshWifiStatus();
+  }
 
   /* ---------- Arranque ---------- */
   loadDir("");

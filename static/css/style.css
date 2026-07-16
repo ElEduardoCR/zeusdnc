@@ -24,8 +24,38 @@ html, body {
 }
 
 .brand {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ip-badge {
+  font-size: 0.95rem;
+  color: #cdd5e0;
+  white-space: nowrap;
+}
+
+.wifi-btn {
+  background: #2a3346;
+  border: none;
+  color: #f0f2f5;
+  border-radius: 8px;
+  width: 46px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wifi-btn:active {
+  background: #3d67e0;
 }
 
 .usb-status {
@@ -313,6 +343,21 @@ body.kb-active .columns {
 .entry .entry-size {
   color: #9aa4b2;
   font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Metadatos del archivo a la derecha: fecha/hora arriba, tamaño abajo */
+.entry .entry-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+}
+
+.entry .entry-date {
+  color: #9aa4b2;
+  font-size: 0.78rem;
   white-space: nowrap;
 }
 
@@ -1184,6 +1229,69 @@ body.float-kb-active .modal-box {
 .fk-key.wide { flex: 2; }
 .fk-key.action { background: #33405a; font-size: 0.9rem; }
 .fk-key.active { background: #4d7dff; }
+
+/* ---- WiFi ---- */
+.wifi-current {
+  color: #9aa4b2;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+#btnWifiScan {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.wifi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 48vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.wifi-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #232b3d;
+  border: 3px solid #33405a;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  min-height: 56px;
+}
+
+.wifi-row:active {
+  background: #2a3346;
+}
+
+.wifi-row.active {
+  border-color: #2ecc71;
+}
+
+.wifi-row .wifi-ssid {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.05rem;
+}
+
+.wifi-row .wifi-sig {
+  color: #9aa4b2;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex: none;
+}
+
+.wifi-loading {
+  color: #6b7480;
+  text-align: center;
+  padding: 24px;
+}
 
 /* ---- Pantallas tactiles bajas (p.ej. 800x480 de 7") ---- */
 @media (max-height: 560px) {

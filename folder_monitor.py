@@ -161,10 +161,11 @@ def search_files(query, limit=500):
             if reldir == ".":
                 reldir = ""
             try:
-                size = os.stat(full).st_size
+                st = os.stat(full)
+                size, mtime = st.st_size, st.st_mtime
             except OSError:
-                size = 0
-            results.append({"name": fn, "path": rel, "dir": reldir, "size": size})
+                size, mtime = 0, 0
+            results.append({"name": fn, "path": rel, "dir": reldir, "size": size, "mtime": mtime})
             if len(results) >= limit:
                 return results
     return results
