@@ -10,6 +10,7 @@ import subprocess
 import time
 
 _ip_cache = {"ip": None, "t": 0.0}
+_wifi_cache = {"ssid": None, "t": 0.0}
 
 
 def get_ip():
@@ -44,17 +45,29 @@ def _split_terse(line):
     return [p.replace("\\:", ":").replace("\\\\", "\\") for p in parts]
 
 
-def wifi_status():
-    ssid = None
+def _wifi_ssid():
     try:
-        r = _nmcli(["-t", "-f", "ACTIVE,SSID", "device", "wifi"])
+        r = _nmcli(["-t", "-f", "ACTIVE,SSID", "device", "wifi"], timeout=8)
         for line in r.stdout.splitlines():
             if line.startswith("yes:"):
-                ssid = line.split(":", 1)[1]
-                break
+                return line.split(":", 1)[1]
     except Exception:  # noqa: BLE001
         pass
-    return {"ssid": ssid, "ip": get_ip_cached()}
+    return None
+
+
+def wifi_ssid_cached(ttl=6):
+    """SSID de la red WiFi activa (o None). Cacheado para no invocar nmcli en
+    cada consulta de estado (que ocurre cada segundo)."""
+    now = time.time()
+    if now - _wifi_cache["t"] > ttl:
+        _wifi_cache["ssid"] = _wifi_ssid()
+        _wifi_cache["t"] = now
+    return _wifi_cache["ssid"]
+
+
+def wifi_status():
+    return {"ssid": _wifi_ssid(), "ip": get_ip_cached()}
 
 
 def wifi_scan():

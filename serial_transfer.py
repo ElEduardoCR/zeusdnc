@@ -103,6 +103,7 @@ def _run_transfer(device_path, profile, filepath, display_name):
         payload = _prepare_payload(filepath, terminator)
         total = len(payload)
 
+        dripfeed = bool(profile.get("dripfeed", False))
         state.update_transfer(
             status="sending",
             filename=display_name,
@@ -110,10 +111,15 @@ def _run_transfer(device_path, profile, filepath, display_name):
             bytes_sent=0,
             total_bytes=total,
             percent=0,
-            message="",
+            message="Goteo (drip-feed) en curso…" if dripfeed else "",
         )
 
         flow = profile.get("flow_control", "xonxoff")
+        # Modo drip-feed (goteo): la maquina ejecuta mientras recibe y frena el
+        # envio con el control de flujo por minutos (movimientos largos, cambios
+        # de herramienta, feed-hold). En ese modo NO se ponen timeouts: se
+        # alimenta indefinidamente y solo se detiene con CANCELAR. En modo punch
+        # (normal) si hay timeouts como red de seguridad.
 
         with serial.Serial(
             port=device_path,
@@ -124,7 +130,7 @@ def _run_transfer(device_path, profile, filepath, display_name):
             xonxoff=(flow == "xonxoff"),
             rtscts=(flow == "rtscts"),
             timeout=5,
-            write_timeout=30,
+            write_timeout=(None if dripfeed else 30),
         ) as ser:
             with _ser_lock:
                 _current_ser = ser
@@ -166,13 +172,17 @@ def _run_transfer(device_path, profile, filepath, display_name):
             # esperamos a que el buffer de salida se vacie antes de cerrar.
             # Se usa out_waiting + sleep (no tcdrain) para no congelar la app y
             # poder poner un timeout si la maquina se queda en XOFF.
-            state.update_transfer(message="Finalizando envio...")
-            drain_deadline = time.time() + 120
+            state.update_transfer(
+                message="Finalizando goteo…" if dripfeed else "Finalizando envio..."
+            )
+            # En goteo no hay limite de tiempo (la maquina puede tardar mucho
+            # en consumir); en punch, red de seguridad de 120 s.
+            drain_deadline = None if dripfeed else time.time() + 120
             try:
                 while ser.out_waiting > 0:
                     if _cancel_event.is_set():
                         raise _Cancelled()
-                    if time.time() > drain_deadline:
+                    if drain_deadline is not None and time.time() > drain_deadline:
                         raise serial.SerialException(
                             "Se agoto el tiempo esperando a que la maquina reciba "
                             "(¿esta en modo recepcion? ¿control de flujo/cable correctos?)"

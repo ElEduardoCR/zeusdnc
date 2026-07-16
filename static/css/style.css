@@ -58,6 +58,10 @@ html, body {
   background: #3d67e0;
 }
 
+/* Color del icono segun conexion WiFi */
+.wifi-btn.on { color: #2ecc71; }
+.wifi-btn.off { color: #e05a4d; }
+
 .usb-status {
   display: flex;
   align-items: center;
@@ -977,6 +981,13 @@ body.kb-active .columns {
   width: 22px;
   height: 22px;
   flex: none;
+}
+
+.form-grid label.check-label.check-wide {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  color: #cdd5e0;
+  font-size: 0.9rem;
 }
 
 .form-error {

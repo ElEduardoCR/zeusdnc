@@ -41,6 +41,7 @@ def api_state():
         "files_version": snap["files_version"],
         "transfer": snap["transfer"],
         "ip": system_info.get_ip_cached(),
+        "wifi_ssid": system_info.wifi_ssid_cached(),
     })
 
 

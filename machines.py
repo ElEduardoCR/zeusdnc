@@ -91,6 +91,7 @@ def validate_machine(data):
         "line_terminator": term,
         "dtr": bool(data.get("dtr", False)),
         "rts": bool(data.get("rts", False)),
+        "dripfeed": bool(data.get("dripfeed", False)),
     }, None
 
 

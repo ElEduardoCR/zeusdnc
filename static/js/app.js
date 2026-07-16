@@ -71,6 +71,7 @@
   const mfTerm = $("mfTerm");
   const mfDtr = $("mfDtr");
   const mfRts = $("mfRts");
+  const mfDrip = $("mfDrip");
   const mfError = $("mfError");
   const btnCancelMachineEdit = $("btnCancelMachineEdit");
   const btnSaveMachineEdit = $("btnSaveMachineEdit");
@@ -174,7 +175,8 @@
   function machineSubLabel(m) {
     const flow = m.flow_control === "xonxoff" ? "XON/XOFF" : "RTS/CTS";
     const term = m.line_terminator === "CRLF" ? "CR+LF" : m.line_terminator;
-    return `${m.baudrate} baud · ${m.bytesize}${m.parity}${m.stopbits} · ${flow} · ${term}`;
+    const drip = m.dripfeed ? " · goteo" : "";
+    return `${m.baudrate} baud · ${m.bytesize}${m.parity}${m.stopbits} · ${flow} · ${term}${drip}`;
   }
 
   function openModal(el) { el.classList.add("visible"); }
@@ -620,6 +622,7 @@
     mfTerm.value = m ? m.line_terminator : "CRLF";
     mfDtr.checked = m ? !!m.dtr : false;
     mfRts.checked = m ? !!m.rts : false;
+    mfDrip.checked = m ? !!m.dripfeed : false;
     mfError.textContent = "";
     openModal(machineEditModal);
   }
@@ -638,6 +641,7 @@
       line_terminator: mfTerm.value,
       dtr: mfDtr.checked,
       rts: mfRts.checked,
+      dripfeed: mfDrip.checked,
     };
     if (editingMachineId) payload.id = editingMachineId;
     const res = await fetch("/api/machine/save", {
@@ -849,6 +853,10 @@
     machines = s.machines;
     selectedMachineId = s.active_machine_id || null;
     ipBadge.textContent = s.ip ? "IP: " + s.ip : "IP: —";
+    const wifiOn = !!s.wifi_ssid;
+    btnWifi.classList.toggle("on", wifiOn);
+    btnWifi.classList.toggle("off", !wifiOn);
+    btnWifi.title = wifiOn ? "WiFi: " + s.wifi_ssid : "WiFi desconectado — configurar";
     renderConnection(s);
     updateMachineSelectLabel();
     if (isOpen(machineModal)) renderMachineModalList();
