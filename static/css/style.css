@@ -13,6 +13,43 @@ html, body {
   overflow: hidden;
 }
 
+/* ---- Scrollbars gruesas y tactiles (para dedo en pantalla chica) ----
+   El "pulgar" tiene min-height/width para que no se haga diminuto en
+   programas muy largos. Aplica a todas las areas con scroll.
+   OJO: no se usa la propiedad estandar 'scrollbar-width' porque en Chromium
+   reciente desactiva el estilo ::-webkit-scrollbar (y solo permite thin/auto,
+   no un grosor a medida). */
+::-webkit-scrollbar {
+  width: 18px;
+  height: 18px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #46536e;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 10px;
+  min-height: 64px;
+  min-width: 64px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #566285;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #4d7dff;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .topbar {
   height: 60px;
   display: flex;
