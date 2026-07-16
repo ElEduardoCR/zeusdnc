@@ -24,4 +24,9 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-exec "$BROWSER" --kiosk --incognito --disable-infobars --noerrdialogs --disable-session-crashed-bubble "$URL"
+# --disable-features=Translate quita el globo de "?Traducir esta pagina?" que
+# Chromium muestra arriba a la derecha al detectar la interfaz en espanol; en
+# kiosko no hay forma comoda de cerrarlo. --no-first-run evita los dialogos de
+# bienvenida si el perfil se crea de cero.
+exec "$BROWSER" --kiosk --incognito --disable-infobars --noerrdialogs \
+  --disable-session-crashed-bubble --disable-features=Translate --no-first-run "$URL"
