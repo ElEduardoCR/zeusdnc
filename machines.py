@@ -14,7 +14,10 @@ MACHINES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config
 _lock = threading.Lock()
 
 VALID_PARITY = {"N", "E", "O", "M", "S"}
-VALID_FLOW = {"xonxoff", "rtscts"}
+# "none" = sin control de flujo. serial_transfer ya lo resuelve bien (deja
+# xonxoff y rtscts en False); faltaba solo aceptarlo aqui, y sin el la app de
+# iPhone no podia guardar un perfil sin control de flujo.
+VALID_FLOW = {"xonxoff", "rtscts", "none"}
 VALID_TERM = {"CR", "CRLF", "LF"}
 
 
