@@ -1,0 +1,8 @@
+{
+  "program_source": {
+    "type": "agent",
+    "url": "http://zeuz-agent.local:47820",
+    "token": "PEGA_AQUI_EL_TOKEN_DE_EMPAREJAMIENTO"
+  }
+}
+

@@ -17,3 +17,8 @@ venv/
 
 # Git worktrees locales (no versionar)
 .worktrees/
+config/runtime.json
+.runtime-test-programs/
+image/cache/
+image/build/
+image/dist/

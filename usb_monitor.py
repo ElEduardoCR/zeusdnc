@@ -6,7 +6,10 @@ cada vez que aparece o desaparece.
 """
 import re
 
-import pyudev
+try:
+    import pyudev
+except ImportError:  # Permite abrir la interfaz en Mac/Windows para desarrollo.
+    pyudev = None
 
 from state import state
 
@@ -44,6 +47,8 @@ def _handle_event(action, device):
 
 
 def start_usb_monitor():
+    if pyudev is None:
+        return None
     context = pyudev.Context()
 
     # Registrar todos los adaptadores que ya esten conectados al arrancar.

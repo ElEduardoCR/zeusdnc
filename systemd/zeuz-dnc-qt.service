@@ -1,0 +1,28 @@
+[Unit]
+Description=Zeuz DNC Qt
+After=network-online.target
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=zeuz
+Group=zeuz
+WorkingDirectory=/opt/zeuz/zeusdnc
+Environment=PYTHONUNBUFFERED=1
+Environment=ZEUZ_CONFIG_PATH=/var/lib/zeuz/runtime.json
+Environment=QT_QPA_PLATFORM=eglfs
+Environment=QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+Environment=QT_QPA_EGLFS_HIDECURSOR=1
+ExecStart=/usr/bin/python3 -m qt_app
+Restart=always
+RestartSec=2
+TimeoutStopSec=5
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty1
+StandardInput=tty
+
+[Install]
+WantedBy=multi-user.target

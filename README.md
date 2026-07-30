@@ -164,3 +164,33 @@ funcionan antes de conectar una máquina real.
 - La conversión de fin de línea (CR o CRLF) se aplica al contenido del
   archivo justo antes de enviarlo, sin modificar el archivo original en
   la carpeta compartida.
+# Migración a Zeuz nativo
+
+La aplicación está migrando de Flask + Chromium a Raspberry Pi OS Lite,
+Python para Zeuz Core y el motor de comunicación, y PySide6 + Qt Quick/QML
+para la interfaz táctil. La versión web que se documenta más abajo se conserva
+mientras termina la transición.
+
+El nuevo punto de entrada nativo es:
+
+```bash
+python -m venv .venv
+.venv/bin/pip install -r requirements-qt.txt
+.venv/bin/python -m qt_app
+```
+
+Para emparejar la Pi con Zeuz Agent y crear el archivo local (ignorado por
+Git) `config/runtime.json`:
+
+```bash
+.venv/bin/python -m zeuz_core.pair_agent http://IP-DE-LA-PC:47820 123456
+```
+
+La interfaz ejecuta las lecturas de red y disco fuera del hilo visual. El
+envío RS232 continúa en el hilo de `serial_transfer.py`, de modo que la
+pantalla permanece responsiva durante una transferencia.
+
+El servicio para arrancar directamente en Qt desde Raspberry Pi OS Lite está
+en `systemd/zeuz-dnc-qt.service`.
+
+---
