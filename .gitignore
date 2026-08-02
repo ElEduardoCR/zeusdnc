@@ -22,3 +22,4 @@ config/runtime.json
 image/cache/
 image/build/
 image/dist/
+image/diagnostic/zeuz_diag_ed25519

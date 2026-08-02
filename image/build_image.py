@@ -25,7 +25,7 @@ CACHE_DIR = IMAGE_DIR / "cache"
 BUILD_DIR = IMAGE_DIR / "build"
 DIST_DIR = IMAGE_DIR / "dist"
 
-VERSION = "0.2.0"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 BASE_NAME = "2026-06-18-raspios-trixie-arm64-lite.img.xz"
 BASE_URL = (
     "https://downloads.raspberrypi.com/raspios_lite_arm64/images/"
@@ -45,6 +45,7 @@ SYSTEMD_RUN_ARGS = (
 )
 
 PAYLOAD_FILES = (
+    "VERSION",
     "machines.py",
     "serial_transfer.py",
     "state.py",
@@ -52,6 +53,13 @@ PAYLOAD_FILES = (
     "usb_monitor.py",
 )
 PAYLOAD_DIRS = ("config", "qt_app", "zeuz_core")
+
+SYSTEMD_FILES = (
+    "zeuz-dnc-qt.service",
+    "zeuz-dnc-api.service",
+    "zeuz-update-check.service",
+    "zeuz-update-apply.service",
+)
 
 
 @dataclass(frozen=True)
@@ -343,11 +351,12 @@ def inject_image(
         write_fs_bytes(fs, "config.txt", config.encode())
         write_fs_bytes(fs, "firstrun.sh", (IMAGE_DIR / "firstboot.sh").read_bytes())
         write_fs_bytes(fs, "zeuz/zeusdnc.tar.gz", payload.read_bytes())
-        write_fs_bytes(
-            fs,
-            "zeuz/zeuz-dnc-qt.service",
-            (ROOT / "systemd" / "zeuz-dnc-qt.service").read_bytes(),
-        )
+        for service_name in SYSTEMD_FILES:
+            write_fs_bytes(
+                fs,
+                f"zeuz/{service_name}",
+                (ROOT / "systemd" / service_name).read_bytes(),
+            )
         write_fs_bytes(
             fs,
             "zeuz/manifest.json",
@@ -376,7 +385,7 @@ def validate_image(image: Path) -> dict:
             "firstrun.sh",
             "zeuz/manifest.json",
             "zeuz/zeusdnc.tar.gz",
-            "zeuz/zeuz-dnc-qt.service",
+            *(f"zeuz/{service_name}" for service_name in SYSTEMD_FILES),
         )
         missing = [path for path in required if not fs.exists(path)]
         if missing:
@@ -384,6 +393,22 @@ def validate_image(image: Path) -> dict:
         cmdline = fs.readtext("cmdline.txt")
         if SYSTEMD_RUN_ARGS not in cmdline:
             raise RuntimeError("cmdline.txt no activa el aprovisionamiento")
+        firstboot = fs.readtext("firstrun.sh")
+        if "useradd --uid 1000" in firstboot:
+            raise RuntimeError("firstrun.sh todavía fuerza el UID 1000")
+        for marker in (
+            "usermod --login zeuz",
+            "zeuz-firstboot-error.log",
+            "systemctl enable zeuz-update-check.service",
+            "provisioning=screen",
+        ):
+            if marker not in firstboot:
+                raise RuntimeError(f"firstrun.sh no contiene {marker}")
+        for marker in ("dpkg --unpack", "dpkg --configure -a", "dpkg --audit"):
+            if marker not in firstboot:
+                raise RuntimeError(f"firstrun.sh no contiene {marker}")
+        if "apt-get" in firstboot:
+            raise RuntimeError("firstrun.sh todavía usa la adquisición de apt")
         manifest = json.loads(fs.readtext("zeuz/manifest.json"))
         debs = [path for path in fs.walk.files(filter=["*.deb"])]
         if not debs:

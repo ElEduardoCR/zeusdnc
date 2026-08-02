@@ -9,7 +9,10 @@ import os
 import re
 import threading
 
-MACHINES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "machines.json")
+MACHINES_PATH = os.environ.get(
+    "ZEUZ_MACHINES_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "machines.json"),
+)
 
 _lock = threading.Lock()
 

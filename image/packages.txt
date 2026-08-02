@@ -22,5 +22,8 @@ qml6-module-qtquick-window
 python3-serial
 python3-pyudev
 
+# Configuración Wi-Fi desde la pantalla táctil (provee nmcli).
+network-manager
+
 # Fuente local para que Qt siempre tenga una tipografía disponible.
 fonts-dejavu-core

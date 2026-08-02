@@ -23,6 +23,23 @@ ApplicationWindow {
 
     font.family: "Inter"
 
+    function toggleFloatingKeyboard() {
+        if (floatingKeyboard.visible) {
+            floatingKeyboard.visible = false
+        } else if (floatingKeyboard.target) {
+            floatingKeyboard.reopen()
+        } else {
+            floatingKeyboard.showFor(newName, false)
+        }
+    }
+
+    function applyEditorText(value) {
+        var oldCursor = editor.cursorPosition
+        editor.text = value
+        editor.cursorPosition = Math.min(oldCursor, editor.length)
+        editor.forceActiveFocus()
+    }
+
     component Panel: Rectangle {
         radius: 18
         color: window.panel
@@ -33,6 +50,9 @@ ApplicationWindow {
     component ActionButton: Button {
         id: control
         property color buttonColor: window.accent
+        readonly property real buttonLuminance: 0.299 * buttonColor.r
+                                                + 0.587 * buttonColor.g
+                                                + 0.114 * buttonColor.b
         font.pixelSize: 17
         font.weight: Font.DemiBold
         implicitHeight: 52
@@ -46,10 +66,15 @@ ApplicationWindow {
         }
         contentItem: Text {
             text: control.text
-            color: control.enabled ? "#071118" : "#708095"
+            color: !control.enabled ? "#708095"
+                 : control.buttonLuminance > 0.56 ? "#071118" : window.textMain
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             font: control.font
+            elide: Text.ElideRight
+            maximumLineCount: 1
+            leftPadding: 7
+            rightPadding: 7
         }
     }
 
@@ -114,12 +139,30 @@ ApplicationWindow {
                 text: backend.status
                 color: backend.status === "Listo" ? success : textMuted
                 font.pixelSize: 15
+                elide: Text.ElideRight
+                Layout.maximumWidth: 135
             }
 
             ActionButton {
-                text: "AJUSTES"
+                text: backend.wifiConnected && backend.wifiIP
+                      ? "WI-FI · " + backend.wifiIP : "WI-FI"
+                Layout.preferredWidth: 168
+                font.pixelSize: 12
+                buttonColor: backend.wifiConnected ? success : panelRaised
+                onClicked: wifiDialog.open()
+            }
+
+            ActionButton {
+                text: "TECLADO"
                 Layout.preferredWidth: 112
                 buttonColor: panelRaised
+                onClicked: window.toggleFloatingKeyboard()
+            }
+
+            ActionButton {
+                text: backend.updateAvailable ? "ACTUALIZAR" : "AJUSTES"
+                Layout.preferredWidth: 122
+                buttonColor: backend.updateAvailable ? success : panelRaised
                 onClicked: settingsDialog.open()
             }
         }
@@ -249,6 +292,10 @@ ApplicationWindow {
                                 color: panelRaised
                                 border.color: newName.activeFocus ? accent : line
                             }
+                            onActiveFocusChanged: {
+                                if (activeFocus)
+                                    floatingKeyboard.showFor(newName, false)
+                            }
                         }
                         ActionButton {
                             text: "+"
@@ -289,6 +336,13 @@ ApplicationWindow {
                             }
                         }
                         ActionButton {
+                            text: "EDITAR"
+                            enabled: !editor.readOnly
+                            Layout.preferredWidth: 108
+                            buttonColor: panelRaised
+                            onClicked: editorActions.open()
+                        }
+                        ActionButton {
                             text: "Guardar"
                             enabled: backend.document.path !== undefined && !backend.document.truncated
                             Layout.preferredWidth: 120
@@ -314,10 +368,15 @@ ApplicationWindow {
                             color: "#0A111B"
                             border.color: editor.activeFocus ? accent : line
                         }
+                        onActiveFocusChanged: {
+                            if (activeFocus && !readOnly)
+                                floatingKeyboard.showFor(editor, true)
+                        }
                         onTextChanged: {
                             // El binding se rompe al editar; el documento guardado
                             // sigue siendo la referencia para detectar cambios.
                         }
+                        Component.onCompleted: backend.attachEditorDocument(editor.textDocument)
                     }
 
                     Connections {
@@ -346,45 +405,21 @@ ApplicationWindow {
                         font.letterSpacing: 1.2
                     }
 
-                    ListView {
-                        id: machineList
+                    ActionButton {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(contentHeight, 250)
-                        spacing: 7
-                        model: backend.machines
+                        text: backend.selectedMachineName || "SELECCIONAR MÁQUINA"
+                        buttonColor: backend.selectedMachineId ? success : panelRaised
+                        onClicked: machineDialog.open()
+                    }
 
-                        delegate: Rectangle {
-                            required property var modelData
-                            width: machineList.width
-                            height: 62
-                            radius: 12
-                            color: machineArea.pressed ? Qt.lighter(panelRaised, 1.12) : panelRaised
-                            border.color: backend.selectedMachineId === modelData.id ? accent : line
-                            border.width: backend.selectedMachineId === modelData.id ? 2 : 1
-                            Column {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.leftMargin: 14
-                                width: parent.width - 28
-                                spacing: 3
-                                Text {
-                                    text: modelData.name
-                                    color: textMain
-                                    font.pixelSize: 16
-                                    font.weight: Font.DemiBold
-                                }
-                                Text {
-                                    text: modelData.baudrate + " · "
-                                          + modelData.bytesize + modelData.parity + modelData.stopbits
-                                    color: textMuted
-                                    font.pixelSize: 12
-                                }
-                            }
-                            TapHandler {
-                                id: machineArea
-                                onTapped: backend.selectMachine(modelData.id)
-                            }
-                        }
+                    Text {
+                        Layout.fillWidth: true
+                        text: backend.selectedMachineId
+                              ? "Perfil listo para la transferencia"
+                              : "Selecciona, edita o agrega una máquina"
+                        color: backend.selectedMachineId ? success : textMuted
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
                     }
 
                     Rectangle {
@@ -445,17 +480,692 @@ ApplicationWindow {
     }
 
     Dialog {
+        id: editorActions
+        anchors.centerIn: parent
+        width: Math.min(620, window.width - 50)
+        height: 360
+        modal: true
+        title: "Herramientas del editor"
+        closePolicy: Popup.CloseOnEscape
+        background: Rectangle { radius: 18; color: panel; border.color: line }
+        header: Rectangle {
+            implicitHeight: 62
+            color: "transparent"
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 22
+                anchors.verticalCenter: parent.verticalCenter
+                text: "HERRAMIENTAS DEL EDITOR"
+                color: textMain
+                font.pixelSize: 19
+                font.weight: Font.Bold
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 12
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "BUSCAR"
+                    buttonColor: panelRaised
+                    onClicked: {
+                        editorActions.close()
+                        searchDialog.replacementMode = false
+                        searchDialog.open()
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "BUSCAR Y REEMPLAZAR"
+                    buttonColor: panelRaised
+                    onClicked: {
+                        editorActions.close()
+                        searchDialog.replacementMode = true
+                        searchDialog.open()
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "QUITAR NUMERACIÓN N"
+                    buttonColor: panelRaised
+                    onClicked: {
+                        window.applyEditorText(backend.removeLineNumbers(editor.text))
+                        editorActions.close()
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "AÑADIR NUMERACIÓN N"
+                    buttonColor: panelRaised
+                    onClicked: {
+                        window.applyEditorText(backend.addLineNumbers(editor.text))
+                        editorActions.close()
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "DESHACER"
+                    enabled: editor.canUndo
+                    buttonColor: panelRaised
+                    onClicked: {
+                        editor.undo()
+                        editorActions.close()
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: true
+                    text: "CERRAR"
+                    buttonColor: panelRaised
+                    onClicked: editorActions.close()
+                }
+            }
+            Item { Layout.fillHeight: true }
+        }
+    }
+
+    Dialog {
+        id: searchDialog
+        anchors.centerIn: parent
+        width: Math.min(650, window.width - 50)
+        height: replacementMode ? 360 : 280
+        modal: true
+        title: replacementMode ? "Buscar y reemplazar" : "Buscar"
+        closePolicy: Popup.CloseOnEscape
+        property bool replacementMode: false
+        property string resultMessage: ""
+
+        function findNext() {
+            var query = searchText.text
+            if (!query.length) {
+                resultMessage = "Escribe el texto que deseas buscar"
+                return false
+            }
+            var position = editor.text.indexOf(query, editor.selectionEnd)
+            if (position < 0)
+                position = editor.text.indexOf(query, 0)
+            if (position < 0) {
+                resultMessage = "No se encontró \"" + query + "\""
+                return false
+            }
+            editor.select(position, position + query.length)
+            resultMessage = "Coincidencia encontrada"
+            return true
+        }
+
+        function replaceCurrent() {
+            var query = searchText.text
+            if (editor.selectedText !== query && !findNext())
+                return
+            var start = editor.selectionStart
+            editor.remove(editor.selectionStart, editor.selectionEnd)
+            editor.insert(start, replacementText.text)
+            editor.cursorPosition = start + replacementText.text.length
+            resultMessage = "Coincidencia reemplazada"
+            findNext()
+        }
+
+        function replaceEveryMatch() {
+            var query = searchText.text
+            if (!query.length) {
+                resultMessage = "Escribe el texto que deseas buscar"
+                return
+            }
+            var count = editor.text.split(query).length - 1
+            if (!count) {
+                resultMessage = "No se encontró \"" + query + "\""
+                return
+            }
+            window.applyEditorText(backend.replaceAll(editor.text, query, replacementText.text))
+            resultMessage = count + (count === 1 ? " reemplazo" : " reemplazos")
+        }
+
+        onOpened: {
+            resultMessage = ""
+            searchText.forceActiveFocus()
+        }
+        background: Rectangle { radius: 18; color: panel; border.color: line }
+        header: Rectangle {
+            implicitHeight: 62
+            color: "transparent"
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 22
+                anchors.verticalCenter: parent.verticalCenter
+                text: searchDialog.replacementMode ? "BUSCAR Y REEMPLAZAR" : "BUSCAR"
+                color: textMain
+                font.pixelSize: 19
+                font.weight: Font.Bold
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 10
+            TextField {
+                id: searchText
+                Layout.fillWidth: true
+                implicitHeight: 48
+                color: textMain
+                placeholderText: "Texto a buscar"
+                placeholderTextColor: textMuted
+                background: Rectangle { radius: 10; color: panelRaised; border.color: searchText.activeFocus ? accent : line }
+                onActiveFocusChanged: if (activeFocus) floatingKeyboard.showFor(searchText, false)
+                onAccepted: searchDialog.findNext()
+            }
+            TextField {
+                id: replacementText
+                visible: searchDialog.replacementMode
+                Layout.fillWidth: true
+                implicitHeight: 48
+                color: textMain
+                placeholderText: "Reemplazar por"
+                placeholderTextColor: textMuted
+                background: Rectangle { radius: 10; color: panelRaised; border.color: replacementText.activeFocus ? accent : line }
+                onActiveFocusChanged: if (activeFocus) floatingKeyboard.showFor(replacementText, false)
+            }
+            Text {
+                Layout.fillWidth: true
+                text: searchDialog.resultMessage
+                color: textMuted
+                font.pixelSize: 13
+            }
+            Item { Layout.fillHeight: true }
+            RowLayout {
+                Layout.fillWidth: true
+                ActionButton {
+                    text: "CERRAR"
+                    buttonColor: panelRaised
+                    onClicked: searchDialog.close()
+                }
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    visible: searchDialog.replacementMode
+                    text: "REEMPLAZAR TODO"
+                    buttonColor: panelRaised
+                    onClicked: searchDialog.replaceEveryMatch()
+                }
+                ActionButton {
+                    visible: searchDialog.replacementMode
+                    text: "REEMPLAZAR"
+                    buttonColor: panelRaised
+                    onClicked: searchDialog.replaceCurrent()
+                }
+                ActionButton {
+                    text: "SIGUIENTE"
+                    onClicked: searchDialog.findNext()
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: wifiDialog
+        objectName: "wifiDialog"
+        anchors.centerIn: parent
+        width: Math.min(720, window.width - 50)
+        height: Math.min(540, window.height - 35)
+        modal: true
+        title: "Configurar Wi-Fi"
+        closePolicy: Popup.CloseOnEscape
+
+        onOpened: {
+            wifiPassword.text = ""
+            backend.refreshWifiStatus()
+            backend.scanWifi()
+        }
+
+        background: Rectangle {
+            radius: 18
+            color: panel
+            border.color: line
+        }
+
+        header: Rectangle {
+            implicitHeight: 64
+            color: "transparent"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 22
+                anchors.rightMargin: 18
+                Text {
+                    text: "CONFIGURACIÓN WI-FI"
+                    color: textMain
+                    font.pixelSize: 19
+                    font.weight: Font.Bold
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    text: backend.wifiConnected
+                          ? backend.wifiSSID + " · " + backend.wifiIP
+                          : "Sin conexión"
+                    color: backend.wifiConnected ? success : textMuted
+                    font.pixelSize: 12
+                    elide: Text.ElideMiddle
+                    Layout.maximumWidth: 310
+                }
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 10
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "REDES DISPONIBLES"
+                    color: textMuted
+                    font.pixelSize: 12
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.1
+                }
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    text: "BUSCAR"
+                    Layout.preferredWidth: 105
+                    buttonColor: panelRaised
+                    enabled: !backend.busy
+                    onClicked: backend.scanWifi()
+                }
+            }
+
+            ListView {
+                id: wifiList
+                Layout.fillWidth: true
+                Layout.preferredHeight: 190
+                clip: true
+                spacing: 6
+                model: backend.wifiNetworks
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: wifiList.width
+                    height: 52
+                    radius: 11
+                    color: wifiNetworkTap.pressed ? Qt.lighter(panelRaised, 1.12) : panelRaised
+                    border.color: wifiSsid.text === modelData.ssid ? accent : line
+                    border.width: wifiSsid.text === modelData.ssid ? 2 : 1
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.ssid
+                            color: textMain
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: modelData.security + " · " + modelData.signal + "%"
+                            color: modelData.active ? success : textMuted
+                            font.pixelSize: 12
+                        }
+                    }
+                    TapHandler {
+                        id: wifiNetworkTap
+                        onTapped: {
+                            wifiSsid.text = modelData.ssid
+                            wifiPassword.forceActiveFocus()
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                TextField {
+                    id: wifiSsid
+                    Layout.fillWidth: true
+                    implicitHeight: 50
+                    color: textMain
+                    placeholderText: "Nombre de la red"
+                    placeholderTextColor: textMuted
+                    font.pixelSize: 15
+                    background: Rectangle {
+                        radius: 11
+                        color: panelRaised
+                        border.color: wifiSsid.activeFocus ? accent : line
+                    }
+                    onActiveFocusChanged: if (activeFocus) floatingKeyboard.showFor(wifiSsid, false)
+                }
+                TextField {
+                    id: wifiPassword
+                    Layout.fillWidth: true
+                    implicitHeight: 50
+                    color: textMain
+                    placeholderText: "Contraseña (vacía si es abierta)"
+                    placeholderTextColor: textMuted
+                    font.pixelSize: 15
+                    echoMode: TextInput.Password
+                    background: Rectangle {
+                        radius: 11
+                        color: panelRaised
+                        border.color: wifiPassword.activeFocus ? accent : line
+                    }
+                    onActiveFocusChanged: if (activeFocus) floatingKeyboard.showFor(wifiPassword, false)
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: backend.status
+                color: backend.wifiConnected ? success : textMuted
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+            }
+
+            Item { Layout.fillHeight: true }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    text: "CERRAR"
+                    buttonColor: panelRaised
+                    onClicked: wifiDialog.close()
+                }
+                ActionButton {
+                    text: backend.busy ? "CONECTANDO…" : "CONECTAR"
+                    enabled: !backend.busy && wifiSsid.text.trim().length > 0
+                    onClicked: backend.connectWifi(wifiSsid.text, wifiPassword.text)
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: machineDialog
+        objectName: "machineDialog"
+        anchors.centerIn: parent
+        width: Math.min(720, window.width - 50)
+        height: Math.min(520, window.height - 40)
+        modal: true
+        title: "Máquinas"
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle { radius: 18; color: panel; border.color: line }
+        header: Rectangle {
+            implicitHeight: 64
+            color: "transparent"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 22
+                anchors.rightMargin: 18
+                Text {
+                    text: "SELECCIONAR MÁQUINA"
+                    color: textMain
+                    font.pixelSize: 19
+                    font.weight: Font.Bold
+                }
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    text: "+"
+                    Layout.preferredWidth: 52
+                    onClicked: {
+                        machineDialog.close()
+                        machineEditor.openFor(null)
+                    }
+                }
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 10
+            ListView {
+                id: machineSelectorList
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 8
+                model: backend.machines
+
+                delegate: RowLayout {
+                    required property var modelData
+                    width: machineSelectorList.width
+                    height: 62
+                    spacing: 8
+                    ActionButton {
+                        Layout.fillWidth: true
+                        text: modelData.name + "  ·  " + modelData.baudrate + "  "
+                              + modelData.bytesize + modelData.parity + modelData.stopbits
+                        buttonColor: backend.selectedMachineId === modelData.id
+                                     ? success : panelRaised
+                        onClicked: {
+                            backend.selectMachine(modelData.id)
+                            machineDialog.close()
+                        }
+                    }
+                    ActionButton {
+                        text: "EDITAR"
+                        Layout.preferredWidth: 105
+                        buttonColor: panelRaised
+                        onClicked: {
+                            machineDialog.close()
+                            machineEditor.openFor(modelData)
+                        }
+                    }
+                }
+            }
+            Text {
+                visible: backend.machines.length === 0
+                Layout.fillWidth: true
+                text: "No hay máquinas. Pulsa + para crear la primera."
+                color: textMuted
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: 15
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    text: "CERRAR"
+                    buttonColor: panelRaised
+                    onClicked: machineDialog.close()
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: machineEditor
+        objectName: "machineEditor"
+        anchors.centerIn: parent
+        width: Math.min(820, window.width - 35)
+        height: Math.min(560, window.height - 24)
+        modal: true
+        title: editingId ? "Editar máquina" : "Nueva máquina"
+        closePolicy: Popup.CloseOnEscape
+        property string editingId: ""
+
+        function choose(combo, value) {
+            for (var index = 0; index < combo.count; ++index) {
+                if (String(combo.model[index]) === String(value)) {
+                    combo.currentIndex = index
+                    return
+                }
+            }
+            combo.currentIndex = 0
+        }
+
+        function openFor(machine) {
+            editingId = machine ? machine.id : ""
+            machineName.text = machine ? machine.name : ""
+            choose(machineBaud, machine ? machine.baudrate : 9600)
+            choose(machineBytes, machine ? machine.bytesize : 8)
+            choose(machineParity, machine ? machine.parity : "N")
+            choose(machineStop, machine ? machine.stopbits : 1)
+            choose(machineFlow, machine ? machine.flow_control : "none")
+            choose(machineTerminator, machine ? machine.line_terminator : "CRLF")
+            machineDtr.checked = machine ? Boolean(machine.dtr) : false
+            machineRts.checked = machine ? Boolean(machine.rts) : false
+            machineDripfeed.checked = machine ? Boolean(machine.dripfeed) : false
+            open()
+        }
+
+        background: Rectangle { radius: 18; color: panel; border.color: line }
+        header: Rectangle {
+            implicitHeight: 62
+            color: "transparent"
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 22
+                anchors.verticalCenter: parent.verticalCenter
+                text: machineEditor.editingId ? "EDITAR MÁQUINA" : "NUEVA MÁQUINA"
+                color: textMain
+                font.pixelSize: 19
+                font.weight: Font.Bold
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 4
+                columnSpacing: 12
+                rowSpacing: 9
+
+                Text { text: "Nombre"; color: textMain; font.pixelSize: 13 }
+                TextField {
+                    id: machineName
+                    Layout.fillWidth: true
+                    implicitHeight: 46
+                    color: textMain
+                    placeholderText: "Centro de maquinado 1"
+                    placeholderTextColor: textMuted
+                    background: Rectangle { radius: 10; color: panelRaised; border.color: machineName.activeFocus ? accent : line }
+                    onActiveFocusChanged: if (activeFocus) floatingKeyboard.showFor(machineName, false)
+                }
+                Text { text: "Baudrate"; color: textMain; font.pixelSize: 13 }
+                ComboBox {
+                    id: machineBaud
+                    Layout.fillWidth: true
+                    implicitHeight: 46
+                    model: [110, 300, 600, 1200, 2400, 4800, 9600, 14400,
+                            19200, 38400, 57600, 115200, 128000, 256000]
+                }
+
+                Text { text: "Bits de datos"; color: textMain; font.pixelSize: 13 }
+                ComboBox { id: machineBytes; Layout.fillWidth: true; model: [5, 6, 7, 8] }
+                Text { text: "Paridad"; color: textMain; font.pixelSize: 13 }
+                ComboBox { id: machineParity; Layout.fillWidth: true; model: ["N", "E", "O", "M", "S"] }
+
+                Text { text: "Bits de parada"; color: textMain; font.pixelSize: 13 }
+                ComboBox { id: machineStop; Layout.fillWidth: true; model: [1, 2] }
+                Text { text: "Control de flujo"; color: textMain; font.pixelSize: 13 }
+                ComboBox { id: machineFlow; Layout.fillWidth: true; model: ["none", "xonxoff", "rtscts"] }
+
+                Text { text: "Terminador"; color: textMain; font.pixelSize: 13 }
+                ComboBox { id: machineTerminator; Layout.fillWidth: true; model: ["CR", "CRLF", "LF"] }
+                Text { text: "Señales"; color: textMain; font.pixelSize: 13 }
+                RowLayout {
+                    CheckBox { id: machineDtr; text: "DTR"; palette.windowText: textMain }
+                    CheckBox { id: machineRts; text: "RTS"; palette.windowText: textMain }
+                    CheckBox { id: machineDripfeed; text: "Drip feed"; palette.windowText: textMain }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: backend.status
+                color: textMuted
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+            }
+
+            Item { Layout.fillHeight: true }
+
+            RowLayout {
+                Layout.fillWidth: true
+                ActionButton {
+                    visible: machineEditor.editingId.length > 0
+                    text: "ELIMINAR"
+                    buttonColor: danger
+                    onClicked: machineDeleteConfirm.open()
+                }
+                Item { Layout.fillWidth: true }
+                ActionButton {
+                    text: "CANCELAR"
+                    buttonColor: panelRaised
+                    onClicked: machineEditor.close()
+                }
+                ActionButton {
+                    text: "GUARDAR"
+                    onClicked: {
+                        var ok = backend.saveMachine({
+                            "id": machineEditor.editingId,
+                            "name": machineName.text,
+                            "baudrate": parseInt(machineBaud.currentText),
+                            "bytesize": parseInt(machineBytes.currentText),
+                            "parity": machineParity.currentText,
+                            "stopbits": parseInt(machineStop.currentText),
+                            "flow_control": machineFlow.currentText,
+                            "line_terminator": machineTerminator.currentText,
+                            "dtr": machineDtr.checked,
+                            "rts": machineRts.checked,
+                            "dripfeed": machineDripfeed.checked
+                        })
+                        if (ok)
+                            machineEditor.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: machineDeleteConfirm
+        anchors.centerIn: parent
+        width: 440
+        modal: true
+        title: "Eliminar máquina"
+        background: Rectangle { radius: 16; color: panel; border.color: line }
+        contentItem: ColumnLayout {
+            spacing: 16
+            Text {
+                Layout.fillWidth: true
+                text: "¿Eliminar este perfil de máquina?"
+                color: textMain
+                font.pixelSize: 16
+                wrapMode: Text.Wrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                ActionButton { text: "CANCELAR"; buttonColor: panelRaised; onClicked: machineDeleteConfirm.close() }
+                ActionButton {
+                    text: "ELIMINAR"
+                    buttonColor: danger
+                    onClicked: {
+                        if (backend.deleteMachine(machineEditor.editingId)) {
+                            machineDeleteConfirm.close()
+                            machineEditor.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
         id: settingsDialog
+        objectName: "settingsDialog"
         anchors.centerIn: parent
         width: Math.min(620, window.width - 60)
-        height: Math.min(500, window.height - 50)
+        height: Math.min(560, window.height - 30)
         modal: true
-        title: "Conectar con ZeuzAgent"
+        title: "Ajustes"
         closePolicy: Popup.CloseOnEscape
 
         onOpened: {
             agentAddress.text = backend.agentUrl || "http://zeuz-agent.local:47820"
             pairingCode.text = ""
+            backend.refreshUpdateState()
         }
 
         background: Rectangle {
@@ -471,7 +1181,7 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.leftMargin: 22
                 anchors.verticalCenter: parent.verticalCenter
-                text: "CONEXIÓN DE PROGRAMAS"
+                text: "CONEXIÓN Y SISTEMA"
                 color: textMain
                 font.pixelSize: 19
                 font.weight: Font.Bold
@@ -482,7 +1192,7 @@ ApplicationWindow {
             spacing: 13
 
             Text {
-                text: "ZeuzAgent permite compartir la misma biblioteca con iPhone, Windows, macOS y esta Raspberry."
+                text: "ZeuzAgent permite compartir la misma biblioteca con iPhone, Windows, macOS y este dispositivo Zeuz."
                 color: textMuted
                 font.pixelSize: 14
                 wrapMode: Text.Wrap
@@ -510,6 +1220,10 @@ ApplicationWindow {
                     color: panelRaised
                     border.color: agentAddress.activeFocus ? accent : line
                 }
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        floatingKeyboard.showFor(agentAddress, false)
+                }
             }
 
             Text {
@@ -536,6 +1250,10 @@ ApplicationWindow {
                     color: panelRaised
                     border.color: pairingCode.activeFocus ? accent : line
                 }
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        floatingKeyboard.showFor(pairingCode, false)
+                }
             }
 
             Text {
@@ -546,6 +1264,51 @@ ApplicationWindow {
                      : textMuted
                 font.pixelSize: 13
                 wrapMode: Text.Wrap
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 78
+                radius: 12
+                color: panelRaised
+                border.color: backend.updateAvailable ? success : line
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: backend.updateAvailable
+                                  ? "ACTUALIZACIÓN " + backend.updateVersion + " DISPONIBLE"
+                                  : "SISTEMA ZEUZ DNC"
+                            color: backend.updateAvailable ? success : textMain
+                            font.pixelSize: 14
+                            font.weight: Font.Bold
+                        }
+                        Text {
+                            text: backend.updateAvailable
+                                  ? "Revisión " + backend.updateRevision
+                                  : backend.updateError || ("Versión instalada: " + backend.version)
+                            color: backend.updateError ? danger : textMuted
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+                    ActionButton {
+                        text: backend.updateAvailable ? "ACTUALIZAR" : "BUSCAR"
+                        Layout.preferredWidth: 120
+                        buttonColor: backend.updateAvailable ? success : panel
+                        enabled: !backend.busy
+                        onClicked: {
+                            if (backend.updateAvailable)
+                                backend.installUpdate()
+                            else
+                                backend.checkUpdates()
+                        }
+                    }
+                }
             }
 
             Item { Layout.fillHeight: true }
@@ -573,6 +1336,19 @@ ApplicationWindow {
                     onClicked: backend.pairAgent(agentAddress.text, pairingCode.text)
                 }
             }
+
         }
+    }
+
+    FloatingKeyboard {
+        id: floatingKeyboard
+        objectName: "floatingKeyboard"
+        parent: Overlay.overlay
+        panelColor: window.panel
+        keyColor: window.panelRaised
+        borderColor: window.line
+        textColor: window.textMain
+        mutedTextColor: window.textMuted
+        accentColor: window.accent
     }
 }

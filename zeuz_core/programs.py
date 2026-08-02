@@ -130,7 +130,7 @@ class AgentProgramRepository:
 
 
 class LocalProgramRepository:
-    """Fuente local para equipos que guardan los programas en la propia Pi."""
+    """Fuente local para dispositivos que guardan los programas en Zeuz."""
 
     def __init__(self, root: Path) -> None:
         self.root = root.expanduser().resolve()

@@ -1,0 +1,16 @@
+[Unit]
+Description=Buscar actualizaciones de Zeuz DNC en GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=zeuz
+Group=zeuz
+WorkingDirectory=/opt/zeuz/zeusdnc
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m zeuz_core.updater --check
+TimeoutStartSec=45
+
+[Install]
+WantedBy=multi-user.target
