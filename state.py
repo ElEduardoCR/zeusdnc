@@ -18,7 +18,8 @@ _EMPTY_TRANSFER = {
 class AppState:
     def __init__(self):
         self._lock = threading.Lock()
-        # Puede haber varios adaptadores conectados a la vez (una CNC cada uno).
+        # La Orange Pi vive dentro de una sola CNC. El puerto es un detalle de
+        # hardware y nunca una decisión del operador.
         self.usb_devices = {}            # {ruta: descripcion}
         self.active_device = None        # puerto elegido para enviar
         self._active_user_pick = False   # True si el usuario lo eligio a mano
@@ -28,18 +29,16 @@ class AppState:
 
     def _recompute_active(self):
         # Debe llamarse con el lock tomado.
-        # Con un solo adaptador se elige solo (caso comun). Con dos o mas se
-        # exige elegir a mano (para no adivinar a que maquina mandar), salvo
-        # que el usuario ya haya elegido uno que sigue conectado.
-        if len(self.usb_devices) == 1:
-            self.active_device = next(iter(self.usb_devices))
-            self._active_user_pick = False
-        elif len(self.usb_devices) == 0:
-            self.active_device = None
+        if self.usb_devices:
+            # Conserva el adaptador actual si sigue presente; si no, usa el
+            # primero estable. Esto también evita pedir un "puerto" si udev
+            # expone más de un nodo durante un reconectado.
+            if self.active_device not in self.usb_devices:
+                self.active_device = sorted(self.usb_devices)[0]
             self._active_user_pick = False
         else:
-            if not (self._active_user_pick and self.active_device in self.usb_devices):
-                self.active_device = None
+            self.active_device = None
+            self._active_user_pick = False
 
     def snapshot(self):
         with self._lock:

@@ -1,5 +1,11 @@
 # DNC — Transferencia de programas CNC vía RS232
 
+Desde la versión 0.6, la operación con iZeuz usa a Zeuz Agent como fuente de
+verdad de las máquinas. El agente manda el perfil serial en `POST /api/send` y
+esta Orange Pi, instalada como esclava dentro de una sola CNC, selecciona su
+adaptador RS232 automáticamente. Las rutas locales de máquinas y selección de
+dispositivo se conservan para instalaciones anteriores y diagnóstico.
+
 Sistema para Raspberry Pi con pantalla táctil que transfiere programas
 G-code desde una carpeta compartida (Samba) a una máquina CNC por
 RS232/serial, en modo "punch" (transferencia completa a memoria, no

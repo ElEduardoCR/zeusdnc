@@ -42,10 +42,20 @@ def get_machine(machine_id):
 
 def _save_all(machines):
     os.makedirs(os.path.dirname(MACHINES_PATH), exist_ok=True)
+    try:
+        current = os.stat(MACHINES_PATH)
+    except OSError:
+        current = None
     tmp = MACHINES_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"machines": machines}, f, indent=2, ensure_ascii=False)
     os.replace(tmp, MACHINES_PATH)
+    if current is not None:
+        os.chmod(MACHINES_PATH, current.st_mode & 0o777)
+        try:
+            os.chown(MACHINES_PATH, current.st_uid, current.st_gid)
+        except PermissionError:
+            pass
 
 
 def validate_machine(data):

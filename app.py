@@ -11,7 +11,7 @@ import folder_monitor
 import serial_transfer
 import usb_monitor
 import system_info
-from machines import delete_machine, get_machine, load_machines, save_machine
+from machines import delete_machine, get_machine, load_machines, save_machine, validate_machine
 from state import state
 
 app = Flask(__name__)
@@ -172,20 +172,25 @@ def api_send():
     snap = state.snapshot()
     if not snap["usb_devices"]:
         return jsonify({"ok": False, "error": "Cable RS232 no conectado"}), 409
-    if not snap["active_device"]:
-        return jsonify({"ok": False, "error": "Elige a que puerto enviar"}), 409
-    if not snap["active_machine_id"]:
+    data = request.get_json(force=True, silent=True) or {}
+    supplied_profile = data.get("machine")
+    if not supplied_profile and not snap["active_machine_id"]:
         return jsonify({"ok": False, "error": "Selecciona una maquina antes de enviar"}), 409
     if snap["transfer"]["status"] == "sending":
         return jsonify({"ok": False, "error": "Ya hay una transferencia en curso"}), 409
 
-    data = request.get_json(force=True, silent=True) or {}
     rel_path = data.get("path")
     abs_path = folder_monitor.resolve_path(rel_path) if rel_path else None
     if not abs_path or not os.path.isfile(abs_path):
         return jsonify({"ok": False, "error": "Archivo invalido"}), 400
 
-    profile = get_machine(snap["active_machine_id"])
+    if supplied_profile:
+        clean, error = validate_machine(supplied_profile)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+        profile = {**clean, "id": supplied_profile.get("id", "agent-machine")}
+    else:
+        profile = get_machine(snap["active_machine_id"])
     if not profile:
         return jsonify({"ok": False, "error": "Perfil de maquina no encontrado"}), 500
 

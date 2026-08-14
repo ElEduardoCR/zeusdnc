@@ -51,6 +51,37 @@ class HeadlessControllerTests(unittest.TestCase):
         self.assertEqual(info["service"], "zeuz-dnc")
         self.assertRegex(info["version"], r"^\d+\.\d+\.\d+$")
 
+    def test_agent_supplies_profile_and_pi_selects_adapter_automatically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            program = Path(directory) / "zeuz-send-agent.nc"
+            program.write_text("O2\nM30\n", encoding="ascii")
+            repository = Mock()
+            repository.materialize.return_value = program
+            settings = Mock()
+            settings.repository.return_value = repository
+            state.on_usb_add("/dev/ttyUSB4", "Adaptador")
+            supplied = {
+                "id": "mori-1",
+                "name": "Torno Mori 1",
+                "baudrate": 9600,
+                "bytesize": 8,
+                "parity": "N",
+                "stopbits": 1,
+                "flow_control": "xonxoff",
+                "line_terminator": "CRLF",
+            }
+
+            controller = HeadlessController()
+            with patch("zeuz_core.headless_api.RuntimeSettings.load", return_value=settings), patch(
+                "zeuz_core.headless_api.serial_transfer.start_transfer", return_value=(True, None)
+            ) as transfer:
+                controller.send("O2.nc", supplied)
+
+            device, profile, _, _ = transfer.call_args.args
+            self.assertEqual(device, "/dev/ttyUSB4")
+            self.assertEqual(profile["name"], "Torno Mori 1")
+            self.assertEqual(profile["baudrate"], 9600)
+
 
 if __name__ == "__main__":
     unittest.main()

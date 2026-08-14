@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 import serial_transfer
 import usb_monitor
-from machines import delete_machine, get_machine, load_machines, save_machine
+from machines import delete_machine, get_machine, load_machines, save_machine, validate_machine
 from state import state
 from zeuz_core.pair_agent import pair, write_runtime
 from zeuz_core.settings import DEFAULT_SETTINGS_PATH, RuntimeSettings
@@ -47,18 +47,23 @@ class HeadlessController:
         RuntimeSettings.load().repository().list("")
         return {"ok": True, "agent_name": result.get("agent_name", "Zeuz Agent")}
 
-    def send(self, path: str) -> None:
+    def send(self, path: str, supplied_profile: dict | None = None) -> None:
         snap = state.snapshot()
         if not snap["usb_devices"]:
             raise Conflict("Cable RS232 no conectado")
-        if not snap["active_device"]:
-            raise Conflict("Elige a qué puerto RS232 enviar")
-        if not snap["active_machine_id"]:
+        if not supplied_profile and not snap["active_machine_id"]:
             raise Conflict("Selecciona una máquina antes de enviar")
         if snap["transfer"]["status"] == "sending":
             raise Conflict("Ya hay una transferencia en curso")
 
-        profile = get_machine(snap["active_machine_id"])
+        profile = None
+        if supplied_profile:
+            clean, error = validate_machine(supplied_profile)
+            if error:
+                raise ValueError(error)
+            profile = {**clean, "id": supplied_profile.get("id", "agent-machine")}
+        else:
+            profile = get_machine(snap["active_machine_id"])
         if not profile:
             raise ValueError("Perfil de máquina no encontrado")
         repository = RuntimeSettings.load().repository()
@@ -143,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(error or "Máquina no encontrada")
                 result = {"ok": True}
             elif path == "/api/send":
-                self.controller.send(body.get("path", ""))
+                self.controller.send(body.get("path", ""), body.get("machine"))
                 result = {"ok": True}
             elif path == "/api/send/cancel":
                 serial_transfer.request_cancel()
