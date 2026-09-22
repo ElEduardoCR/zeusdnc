@@ -7,6 +7,7 @@ python3-pyside6.qtopengl
 python3-pyside6.qtquick
 python3-pyside6.qtquickcontrols2
 qt6-qpa-plugins
+qt6-svg-plugins
 
 # Módulos QML importados por qt_app/qml/Main.qml.
 qml6-module-qtqml
@@ -24,6 +25,9 @@ python3-pyudev
 
 # Configuración Wi-Fi desde la pantalla táctil (provee nmcli).
 network-manager
+
+# Permiso acotado para iniciar el actualizador desde la API sin sudo.
+polkitd
 
 # Fuente local para que Qt siempre tenga una tipografía disponible.
 fonts-dejavu-core

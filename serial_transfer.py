@@ -11,6 +11,7 @@ import time
 import serial
 
 from state import state
+from zeuz_core.operation_guard import OperationLease, Busy
 
 BYTESIZE_MAP = {
     5: serial.FIVEBITS,
@@ -85,13 +86,24 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
     if not _transfer_lock.acquire(blocking=False):
         return False, "Ya hay una transferencia en curso"
 
+    try:
+        lease = OperationLease()
+    except (Busy, OSError) as exc:
+        _transfer_lock.release()
+        return False, str(exc)
     _cancel_event.clear()
-    thread = threading.Thread(
-        target=_run_transfer,
-        args=(device_path, machine_profile, filepath, display_name),
-        daemon=True,
-    )
-    thread.start()
+    def guarded_transfer():
+        try:
+            _run_transfer(device_path, machine_profile, filepath, display_name)
+        finally:
+            lease.close()
+    thread = threading.Thread(target=guarded_transfer, daemon=True)
+    try:
+        thread.start()
+    except Exception:
+        lease.close()
+        _transfer_lock.release()
+        raise
     return True, None
 
 

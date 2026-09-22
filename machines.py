@@ -5,16 +5,32 @@ reiniciar) y se escribe de forma atomica y con un lock para que la edicion
 desde la interfaz no corrompa el JSON si coinciden dos operaciones.
 """
 import json
+import hashlib
 import os
 import re
 import threading
+import contextlib
+import fcntl
 
 MACHINES_PATH = os.environ.get(
     "ZEUZ_MACHINES_PATH",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "machines.json"),
 )
 
-_lock = threading.Lock()
+_thread_lock = threading.RLock()
+
+
+@contextlib.contextmanager
+def _locked():
+    # The touchscreen and headless API are separate processes on the Pi.
+    with _thread_lock:
+        os.makedirs(os.path.dirname(MACHINES_PATH), exist_ok=True)
+        with open(MACHINES_PATH + ".lock", "a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 VALID_PARITY = {"N", "E", "O", "M", "S"}
 # "none" = sin control de flujo. serial_transfer ya lo resuelve bien (deja
@@ -28,7 +44,7 @@ def load_machines():
     try:
         with open(MACHINES_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return []
     return data.get("machines", [])
 
@@ -116,6 +132,11 @@ def _slugify(name):
     return slug or "maquina"
 
 
+def _revision(profile):
+    fields = {key: value for key, value in profile.items() if key not in {"id", "revision"} and not key.startswith("dnc_")}
+    return int(hashlib.sha256(json.dumps(fields, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:13], 16)
+
+
 def save_machine(data):
     """Crea (si no trae id) o actualiza un perfil. Devuelve (perfil, None)
     o (None, error)."""
@@ -123,13 +144,16 @@ def save_machine(data):
     if err:
         return None, err
 
-    with _lock:
+    with _locked():
         machines = load_machines()
         machine_id = data.get("id")
 
         if machine_id:
             for m in machines:
                 if m.get("id") == machine_id:
+                    if "revision" in data and data["revision"] != m.get("revision", 0):
+                        return None, "El perfil cambió en otro equipo. Vuelve a abrirlo antes de guardar."
+                    clean["revision"] = _revision(clean)
                     m.update(clean)
                     m["id"] = machine_id
                     _save_all(machines)
@@ -144,16 +168,45 @@ def save_machine(data):
             new_id = "{}-{}".format(base, i)
             i += 1
         clean["id"] = new_id
+        clean["revision"] = _revision(clean)
         machines.append(clean)
         _save_all(machines)
         return clean, None
 
 
 def delete_machine(machine_id):
-    with _lock:
+    with _locked():
         machines = load_machines()
         remaining = [m for m in machines if m.get("id") != machine_id]
         if len(remaining) == len(machines):
             return False, "Maquina no encontrada"
         _save_all(remaining)
     return True, None
+
+
+class MachineConflict(ValueError):
+    status = 409
+
+
+def sync_machine(body):
+    """Compare-and-swap for Agent; preserve stable IDs on initial replication."""
+    profile = body.get("machine", {})
+    machine_id = str(profile.get("id", ""))
+    if not machine_id or "expected_revision" not in body:
+        raise ValueError("Falta id o revisión esperada")
+    with _locked():
+        values = load_machines()
+        current = next((m for m in values if m.get("id") == machine_id), None)
+        actual = current.get("revision", 0) if current else None
+        if body["expected_revision"] != actual:
+            raise MachineConflict("El perfil cambió en la pantalla táctil; vuelve a sincronizar")
+        if body.get("delete"):
+            _save_all([m for m in values if m.get("id") != machine_id])
+            return None
+        clean, error = validate_machine(profile)
+        if error:
+            raise ValueError(error)
+        clean.update(id=machine_id, revision=_revision(clean))
+        values = [m for m in values if m.get("id") != machine_id] + [clean]
+        _save_all(values)
+        return clean

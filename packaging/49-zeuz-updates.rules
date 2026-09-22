@@ -1,0 +1,9 @@
+// Only starting the fixed updater is delegated; no arbitrary unit management.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "zeuz" &&
+        action.lookup("unit") == "zeuz-update-apply.service" &&
+        action.lookup("verb") == "start") {
+        return polkit.Result.YES;
+    }
+});

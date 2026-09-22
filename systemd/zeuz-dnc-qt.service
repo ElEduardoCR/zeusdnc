@@ -1,4 +1,6 @@
 [Unit]
+After=zeuz-update-recover.service
+Requires=zeuz-update-recover.service
 Description=Zeuz DNC Qt
 After=NetworkManager.service
 Wants=NetworkManager.service

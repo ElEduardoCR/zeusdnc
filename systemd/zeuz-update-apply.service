@@ -1,16 +1,15 @@
 [Unit]
-Description=Aplicar actualización descargada de Zeuz DNC
-After=network-online.target
+Requires=zeuz-update-recover.service
+Description=Instalar actualización verificada de Zeuz DNC
+After=network-online.target zeuz-update-recover.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/opt/zeuz/zeusdnc
+WorkingDirectory=/opt/zeuz
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 -m zeuz_core.updater --apply
-ExecStartPost=/usr/bin/systemctl daemon-reload
-ExecStartPost=/usr/bin/systemctl --no-block try-restart zeuz-dnc-api.service
-ExecStartPost=/usr/bin/systemctl --no-block try-restart zeuz-dnc-qt.service
-TimeoutStartSec=5min
+ExecStart=/usr/bin/python3 /usr/local/lib/zeuz/update_runner.py
+TimeoutStartSec=10min
+TimeoutStopSec=120

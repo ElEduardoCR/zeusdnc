@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
@@ -19,6 +19,7 @@ def main() -> int:
     app = QGuiApplication(sys.argv)
     app.setOrganizationName("Zeuz")
     app.setApplicationName("Zeuz DNC")
+    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / "qml" / "brand" / "app.png")))
 
     usb_monitor.start_usb_monitor()
     backend = AppBackend()

@@ -200,3 +200,38 @@ El servicio para arrancar directamente en Qt desde Raspberry Pi OS Lite está
 en `systemd/zeuz-dnc-qt.service`.
 
 ---
+
+### Integración con el servidor del taller
+
+La API headless incorpora `/api/workshop/*` y el contrato móvil `/v1/*`. Agent puede
+seleccionar esta Pi como servidor, copiar programas conservando versiones, cambiar
+su nombre visible y conciliar perfiles con la pantalla táctil. La configuración
+persiste en `workshop.json`, junto a `runtime.json` (normalmente `/var/lib/zeuz` en la imagen); conserva este archivo,
+`machines.json`, la carpeta de programas y `.zeuz-history` al actualizar la imagen.
+La API del taller comparte el modelo de confianza de la API local existente:
+úsala sólo dentro de la red del taller. El contrato móvil exige emparejamiento/token.
+
+Los clientes locales recargan la selección del servidor sin reiniciar. Las otras Pi
+leen los programas por HTTP desde el servidor elegido y el servidor enruta las
+operaciones del iPhone a la CNC correspondiente, sin pasar por la computadora.
+Los cambios touch se guardan en el equipo inmediatamente y se concilian con Agent
+al reconectarlo. Una revisión desactualizada se rechaza; Agent muestra los conflictos
+cuando ambos lados cambiaron desde la última confirmación. No se reinician equipos
+ni se ejecutan transmisiones al configurar la sincronización.
+
+Pruebas locales, desde este repositorio:
+
+```sh
+PYTHONPATH=../zeuzagent/src .venv/bin/python -m unittest discover -s tests -q
+```
+
+`test_workshop.py` apaga el servidor Agent de prueba y verifica lectura, edición,
+perfiles, envío simulado, enrutamiento a otra Pi y conciliación posterior. También
+verifica respaldo byte por byte, borrados conservados, revisiones, conflictos,
+recuperación y nombres persistentes. El fallo físico de detección necesita aún el
+modelo, versión y registros del equipo afectado: el defecto de búsqueda Bonjour
+corregido en Agent no prueba por sí solo la causa de ese incidente.
+
+### Actualización remota sin pantalla
+
+Desde 0.7.0, Agent y Estado de Zeuz en iPhone permiten comprobar e instalar actualizaciones, seguir la reconexión y activar instalación automática por equipo cuando no haya envíos. La instalación conserva datos y restaura la versión anterior si la nueva API falla. Los equipos con firmware anterior necesitan primero una imagen compatible. Consulta [REMOTE_UPDATES.md](REMOTE_UPDATES.md) para el contrato, seguridad, recuperación y empaquetado.

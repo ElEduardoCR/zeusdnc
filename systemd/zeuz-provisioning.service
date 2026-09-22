@@ -1,0 +1,17 @@
+[Unit]
+Description=Zeuz DNC Bluetooth first-run provisioning
+After=aw859a-bluetooth.service bluetooth.service NetworkManager.service zeuz-identity.service
+Wants=bluetooth.service NetworkManager.service
+ConditionPathExists=!/var/lib/zeuz/network.json
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/zeuz/zeusdnc
+ExecStart=/usr/bin/python3 -m zeuz_provisioning.service
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

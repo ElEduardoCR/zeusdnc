@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import threading
 from http import HTTPStatus
@@ -14,7 +15,21 @@ from machines import delete_machine, get_machine, load_machines, save_machine, v
 from state import state
 from zeuz_core.pair_agent import pair, write_runtime
 from zeuz_core.settings import DEFAULT_SETTINGS_PATH, RuntimeSettings
+from zeuz_core import workshop, update_auth, remote_updates
+from zeuz_core.updater import read_update_state
 from zeuz_core.version import installed_version
+
+
+def device_identity() -> str | None:
+    """Prefer board identity over a potentially cloned OS image; no writes."""
+    for filename in ("/proc/device-tree/serial-number", "/sys/devices/soc0/serial_number", "/etc/machine-id"):
+        try:
+            value = Path(filename).read_text().strip("\x00 \r\n")
+        except OSError:
+            continue
+        if value and set(value) != {"0"}:
+            return hashlib.sha256(("zeuz-device:" + filename + ":" + value).encode()).hexdigest()
+    return None
 
 
 class HeadlessController:
@@ -28,14 +43,19 @@ class HeadlessController:
         return {
             "ok": True,
             "service": "zeuz-dnc",
+            "device_id": device_identity(),
             "hostname": os.uname().nodename,
+            "name": workshop.settings().get("name", os.uname().nodename),
             "version": installed_version(),
             "api": 1,
+            "capabilities": {"remote_update": 1},
+            "update_paired": bool(update_auth.paired_token()),
+            "update": {k: v for k, v in read_update_state().items() if k in {"available", "current_version", "latest_version", "phase", "error"}},
             "agent_configured": settings.source_type == "agent" and bool(settings.agent_token),
         }
 
     @staticmethod
-    def pair_agent(url: str, code: str) -> dict:
+    def pair_agent(url: str, code: str, management_only: bool = False) -> dict:
         clean_url = str(url or "").strip().rstrip("/")
         clean_code = "".join(character for character in str(code or "") if character.isdigit())
         if not clean_url.startswith(("http://", "https://")):
@@ -43,8 +63,15 @@ class HeadlessController:
         if len(clean_code) != 6:
             raise ValueError("El código de Zeuz Agent debe tener seis dígitos")
         result = pair(clean_url, clean_code)
-        write_runtime(DEFAULT_SETTINGS_PATH, clean_url, result["token"])
-        RuntimeSettings.load().repository().list("")
+        if management_only:
+            from zeuz_core.updater import _atomic_write
+            try: value = json.loads(DEFAULT_SETTINGS_PATH.read_text())
+            except FileNotFoundError: value = {}
+            value["paired_agent"] = {"url": clean_url, "token": result["token"]}
+            _atomic_write(DEFAULT_SETTINGS_PATH, json.dumps(value).encode())
+        else:
+            write_runtime(DEFAULT_SETTINGS_PATH, clean_url, result["token"])
+            RuntimeSettings.load().repository().list("")
         return {"ok": True, "agent_name": result.get("agent_name", "Zeuz Agent")}
 
     def send(self, path: str, supplied_profile: dict | None = None) -> None:
@@ -112,6 +139,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith("/api/update/"):
+            self._update("GET")
+            return
+        if path.startswith("/v1/"):
+            self._mobile("GET")
+            return
+        if path.startswith("/api/workshop/"):
+            self._workshop("GET")
+            return
         if path in {"/", "/api/info", "/api/health"}:
             self._json(self.controller.info())
         elif path == "/api/state":
@@ -125,8 +161,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith("/api/update/"):
+            self._update("POST")
+            return
+        if path in {"/api/agent/pair", "/api/workshop/configure"} and update_auth.paired_token() and not update_auth.authorized(self.headers.get("Authorization", "")):
+            self._json({"ok": False, "error": "Se requiere el Agent vinculado para cambiar esta configuración"}, 403)
+            return
+        if path.startswith("/v1/"):
+            self._mobile("POST")
+            return
         try:
             body = self._body()
+            if path.startswith("/api/workshop/"):
+                self._json(workshop.dispatch("POST", self.path, body))
+                return
             if path == "/api/device/select":
                 if not state.select_device(body.get("path")):
                     raise Conflict("Puerto RS232 no disponible")
@@ -154,7 +202,7 @@ class Handler(BaseHTTPRequestHandler):
                 serial_transfer.request_cancel()
                 result = {"ok": True}
             elif path == "/api/agent/pair":
-                result = self.controller.pair_agent(body.get("url", ""), body.get("code", ""))
+                result = self.controller.pair_agent(body.get("url", ""), body.get("code", ""), body.get("management_only") is True)
             else:
                 self._json({"ok": False, "error": "Ruta no encontrada"}, HTTPStatus.NOT_FOUND)
                 return
@@ -162,16 +210,46 @@ class Handler(BaseHTTPRequestHandler):
         except Conflict as exc:
             self._json({"ok": False, "error": str(exc)}, HTTPStatus.CONFLICT)
         except (ValueError, OSError) as exc:
-            self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", HTTPStatus.BAD_REQUEST))
         except Exception as exc:
             self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+
+    def _update(self, method):
+        if not update_auth.authorized(self.headers.get("Authorization", "")):
+            self._json({"ok": False, "error": "Vincula este equipo con tu Agent para administrar actualizaciones"}, 401)
+            return
+        try:
+            self._json(remote_updates.dispatch(self.server.updates, method, urlsplit(self.path).path, self._body() if method == "POST" else None))
+        except Exception as exc:
+            self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", 400))
+
+    def _mobile(self, method: str):
+        from zeuz_core.mobile_api import dispatch
+        try:
+            result = dispatch(self, method)
+            if result is not None:
+                self._json(result)
+        except Exception as exc:
+            self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", 400))
+
+    def _workshop(self, method: str) -> None:
+        try:
+            self._json(workshop.dispatch(method, self.path, self._body() if method == "PUT" else None))
+        except Exception as exc:
+            self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", 400))
+
+    def do_PUT(self) -> None:
+        self._mobile("PUT") if self.path.startswith("/v1/") else self._workshop("PUT")
+
+    def do_DELETE(self) -> None:
+        self._mobile("DELETE") if self.path.startswith("/v1/") else self._workshop("DELETE")
 
     def _body(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise ValueError("Content-Length inválido")
-        if length > 64 * 1024:
+        if length < 0 or length > 180 * 1024 * 1024:
             raise ValueError("Solicitud demasiado grande")
         try:
             value = json.loads(self.rfile.read(length) or b"{}")
@@ -196,12 +274,19 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, address, controller: HeadlessController):
         self.controller = controller
+        self.updates = remote_updates.UpdateManager()
         super().__init__(address, Handler)
 
 
 def main() -> None:
     usb_monitor.start_usb_monitor()
-    Server(("0.0.0.0", 5000), HeadlessController()).serve_forever()
+    server = Server(("0.0.0.0", 5000), HeadlessController())
+    server.updates.start()
+    try:
+        server.serve_forever()
+    finally:
+        server.updates.stop()
+        server.server_close()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import contextlib
+import threading
+import fcntl
 import os
 import tempfile
 import urllib.error
@@ -129,6 +132,20 @@ class AgentProgramRepository:
         return Path(name)
 
 
+_program_lock = threading.RLock()
+
+
+@contextlib.contextmanager
+def program_lock(root: Path):
+    with _program_lock:
+        with (root / ".zeuz-programs.lock").open("a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 class LocalProgramRepository:
     """Fuente local para dispositivos que guardan los programas en Zeuz."""
 
@@ -138,11 +155,13 @@ class LocalProgramRepository:
 
     def _resolve(self, relative: str, *, exists: bool = False) -> Path:
         raw = (relative or "").strip().replace("\\", "/").lstrip("/")
-        if ".." in Path(raw).parts:
+        if any(part.startswith(".") for part in Path(raw).parts):
             raise ProgramSourceError("Ruta inválida")
         target = (self.root / raw).resolve(strict=False)
         try:
-            target.relative_to(self.root)
+            relative = target.relative_to(self.root)
+            if any(part.startswith(".") for part in relative.parts):
+                raise ValueError("Ruta reservada")
         except ValueError as exc:
             raise ProgramSourceError("Ruta inválida") from exc
         if exists and not target.exists():
@@ -159,7 +178,7 @@ class LocalProgramRepository:
             raise ProgramSourceError("Carpeta no encontrada")
         entries = []
         for child in sorted(directory.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold())):
-            if child.name.startswith(".") or child.name in {"Thumbs.db", "desktop.ini"}:
+            if child.is_symlink() or child.name.startswith(".") or child.name in {"Thumbs.db", "desktop.ini"}:
                 continue
             try:
                 child.resolve().relative_to(self.root)
@@ -185,20 +204,27 @@ class LocalProgramRepository:
         target = self._resolve(path, exists=True)
         if not target.is_file():
             raise ProgramSourceError("Programa no encontrado")
-        raw = target.read_bytes()
-        if b"\x00" in raw[:4096]:
+        with target.open("rb") as handle:
+            raw = handle.read(2 * 1024 * 1024 + 1)
+        truncated = len(raw) > 2 * 1024 * 1024
+        raw = raw[:2 * 1024 * 1024]
+        if b"\x00" in raw[:4096] or raw.startswith((b"%PDF-", b"PK\x03\x04", b"\xff\xd8\xff")):
             raise ProgramSourceError("El archivo no es texto CNC compatible")
         stat = target.stat()
         return {
             "name": target.name,
             "path": self._relative(target),
             "content": raw.decode("latin-1"),
-            "truncated": False,
+            "truncated": truncated,
             "size": stat.st_size,
             "modified": stat.st_mtime,
         }
 
     def write(self, path: str, content: str, expected_modified: float | None = None) -> dict:
+        with program_lock(self.root):
+            return self._write_locked(path, content, expected_modified)
+
+    def _write_locked(self, path: str, content: str, expected_modified: float | None = None) -> dict:
         target = self._resolve(path)
         if expected_modified is not None and target.exists():
             if abs(target.stat().st_mtime - expected_modified) > 0.000001:
@@ -242,4 +268,22 @@ class LocalProgramRepository:
         target = self._resolve(path, exists=True)
         if not target.is_file():
             raise ProgramSourceError("Programa no encontrado")
+        if target.stat().st_size > 128 * 1024 * 1024:
+            raise ProgramSourceError("El programa excede 128 MB")
         return target
+
+
+class WorkshopProgramRepository(AgentProgramRepository):
+    """Programs hosted by a Pi, available without the computer."""
+
+    def _request(self, method, endpoint, body=None):
+        endpoint = endpoint.replace("/v1/programs/content", "/api/workshop/content").replace("/v1/programs", "/api/workshop/programs")
+        return super()._request(method, endpoint, body)
+
+    def materialize(self, path: str) -> Path:
+        import base64
+        payload = self._request("GET", f"/api/workshop/bytes?{self._query(path)}")
+        fd, name = tempfile.mkstemp(prefix="zeuz-send-", suffix=Path(path).suffix)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(base64.b64decode(payload["data"], validate=True))
+        return Path(name)

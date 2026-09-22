@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import shutil
 import tarfile
 import tempfile
@@ -32,6 +33,7 @@ SYSTEMD_UNITS = (
     "zeuz-dnc-api.service",
     "zeuz-update-check.service",
     "zeuz-update-apply.service",
+    "zeuz-update-recover.service",
 )
 
 
@@ -59,6 +61,9 @@ def _atomic_write(path: Path, content: bytes, mode: int = 0o640) -> None:
         os.fsync(handle.fileno())
     os.chmod(temporary, mode)
     os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try: os.fsync(descriptor)
+    finally: os.close(descriptor)
 
 
 def _write_state(path: Path, state: dict) -> dict:
@@ -67,12 +72,14 @@ def _write_state(path: Path, state: dict) -> dict:
     return state
 
 
-def read_update_state(path: Path = STATE_PATH) -> dict:
+def read_update_state(path: Path | None = None) -> dict:
+    path = path or STATE_PATH
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         value = {}
     return {
+        **{key: value.get(key) for key in ("phase", "progress", "request_id", "started_at", "completed_at", "archive_sha256", "archive_size", "downloaded_bytes", "installed_at") if key in value},
         "available": bool(value.get("available", False)),
         "current_version": str(value.get("current_version", installed_version())),
         "current_revision": str(value.get("current_revision", "")),
@@ -142,12 +149,16 @@ def check_for_update(
     }
     if latest_key < current_key:
         state["available"] = False
+    state["phase"] = "available" if available else "idle"
     return _write_state(state_path, state)
 
 
 def safe_check_for_update(**kwargs) -> dict:
     state_path = kwargs.get("state_path", STATE_PATH)
     try:
+        previous = read_update_state(state_path)
+        if previous.get("phase") in {"downloading", "waiting_idle", "installing", "restarting"}:
+            return previous
         return check_for_update(**kwargs)
     except Exception as exc:  # noqa: BLE001 - se muestra en la interfaz
         previous = read_update_state(state_path)
@@ -163,12 +174,13 @@ def download_update(
     *,
     state_path: Path = STATE_PATH,
     archive_path: Path = ARCHIVE_PATH,
+    progress: Callable[[int], None] | None = None,
 ) -> dict:
     state = dict(state or read_update_state(state_path))
     if not state.get("available"):
         raise RuntimeError("No hay una actualización nueva disponible")
     revision = str(state.get("latest_revision", ""))
-    if len(revision) != 40:
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise RuntimeError("La revisión de actualización es inválida")
     url = f"https://github.com/{REPOSITORY}/archive/{revision}.tar.gz"
     archive_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,6 +200,8 @@ def download_update(
                     raise RuntimeError("La actualización supera el tamaño permitido")
                 digest.update(block)
                 output.write(block)
+                if progress:
+                    progress(size)
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary, archive_path)
@@ -336,11 +350,16 @@ def main() -> int:
     action.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     if args.check:
-        print(json.dumps(safe_check_for_update(), ensure_ascii=False))
+        from .remote_updates import UpdateManager
+        manager = UpdateManager()
+        manager.check()
+        manager.worker.join()
+        print(json.dumps(manager.status(), ensure_ascii=False))
     elif args.download:
         print(json.dumps(prepare_update(), ensure_ascii=False))
     else:
-        print(json.dumps(apply_downloaded_update(), ensure_ascii=False))
+        from .deployment import apply_managed_update
+        print(json.dumps(apply_managed_update(), ensure_ascii=False))
     return 0
 
 

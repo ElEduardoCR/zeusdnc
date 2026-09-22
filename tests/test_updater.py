@@ -63,6 +63,7 @@ class UpdaterTests(unittest.TestCase):
                     "repo/systemd/zeuz-dnc-api.service": b"[Service]\n",
                     "repo/systemd/zeuz-update-check.service": b"[Service]\n",
                     "repo/systemd/zeuz-update-apply.service": b"[Service]\n",
+                    "repo/systemd/zeuz-update-recover.service": b"[Service]\n",
                 }.items():
                     info = tarfile.TarInfo(name)
                     info.size = len(content)

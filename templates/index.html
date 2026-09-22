@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>DNC - Transferencia CNC</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='brand/app.png') }}">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">ZEUZ DNC</div>
+    <div class="brand"><img src="{{ url_for('static', filename='brand/dnc-dark.svg') }}" alt="ZEUZ DNC" width="176" height="44"></div>
     <div class="topbar-right">
       <span class="ip-badge" id="ipBadge">IP: —</span>
       <button class="wifi-btn" id="btnWifi" title="Configurar WiFi">

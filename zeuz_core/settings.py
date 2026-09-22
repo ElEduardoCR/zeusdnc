@@ -43,6 +43,13 @@ class RuntimeSettings:
         )
 
     def repository(self) -> ProgramRepository:
+        from .workshop import settings
+        from .programs import WorkshopProgramRepository
+        workshop = settings()
+        if "program_server" in workshop:
+            if workshop["program_server"]:
+                return WorkshopProgramRepository(AgentConnection(workshop["program_server"], ""))
+            return LocalProgramRepository(Path(self.local_path))
         if self.source_type == "agent":
             if not self.agent_url or not self.agent_token:
                 raise ValueError("Faltan url/token de Zeuz Agent en config/runtime.json")

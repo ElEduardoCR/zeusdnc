@@ -37,6 +37,7 @@ def write_runtime(path: Path, base_url: str, token: str) -> None:
     with tmp.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(
             {
+                "paired_agent": {"url": base_url.rstrip("/"), "token": token},
                 "program_source": {
                     "type": "agent",
                     "url": base_url.rstrip("/"),
@@ -52,11 +53,17 @@ def write_runtime(path: Path, base_url: str, token: str) -> None:
 
 
 def write_local_runtime(path: Path, local_path: str = "/var/lib/zeuz/programs") -> None:
+    try:
+        previous = json.loads(path.read_text())
+    except (FileNotFoundError, ValueError):
+        previous = {}
+    paired = previous.get("paired_agent") or {key: previous.get("program_source", {}).get(key, "") for key in ("url", "token")}
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(
             {
+                "paired_agent": paired,
                 "program_source": {
                     "type": "local",
                     "path": local_path,

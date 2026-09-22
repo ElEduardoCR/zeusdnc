@@ -61,7 +61,7 @@ done
 
 echo "==> Habilitando configuración Wi-Fi y actualizaciones desde la pantalla"
 cat >/etc/sudoers.d/90-zeuz-controls <<'EOF'
-zeuz ALL=(root) NOPASSWD: /usr/bin/nmcli *, /usr/bin/systemctl start zeuz-update-apply.service
+zeuz ALL=(root) NOPASSWD: /usr/bin/nmcli *
 EOF
 chmod 0440 /etc/sudoers.d/90-zeuz-controls
 
@@ -87,14 +87,22 @@ chmod -R a+rX /opt/zeuz/zeusdnc
 install -d -o zeuz -g zeuz -m 0750 /var/lib/zeuz/programs
 install -d -o root -g root -m 0755 /etc/zeuz
 install -o root -g root -m 0644 /opt/zeuz/zeusdnc/VERSION /etc/zeuz/version
-printf 'image-%s\n' "$(cat /etc/zeuz/version)" >/etc/zeuz/revision
+if [ -f /opt/zeuz/zeusdnc/REVISION ]; then
+    install -o root -g root -m 0644 /opt/zeuz/zeusdnc/REVISION /etc/zeuz/revision
+else
+    printf 'image-%s\n' "$(cat /etc/zeuz/version)" >/etc/zeuz/revision
+fi
 if [ ! -f /var/lib/zeuz/machines.json ]; then
     install -o zeuz -g zeuz -m 0640 /opt/zeuz/zeusdnc/config/machines.json /var/lib/zeuz/machines.json
 fi
 for SERVICE in zeuz-dnc-qt.service zeuz-dnc-api.service \
-    zeuz-update-check.service zeuz-update-apply.service; do
-    install -m 0644 "$PAYLOAD/$SERVICE" "/etc/systemd/system/$SERVICE"
+    zeuz-update-check.service zeuz-update-apply.service zeuz-update-recover.service; do
+    install -m 0644 "/opt/zeuz/zeusdnc/systemd/$SERVICE" "/etc/systemd/system/$SERVICE"
 done
+
+install -d -o root -g root -m 0755 /usr/local/lib/zeuz /etc/polkit-1/rules.d
+install -o root -g root -m 0644 /opt/zeuz/zeusdnc/packaging/update_runner.py /usr/local/lib/zeuz/update_runner.py
+install -o root -g root -m 0644 /opt/zeuz/zeusdnc/packaging/49-zeuz-updates.rules /etc/polkit-1/rules.d/49-zeuz-updates.rules
 
 echo "==> Publicando Zeuz DNC por Bonjour"
 install -d -m 0755 /etc/avahi/services
@@ -138,6 +146,7 @@ systemctl disable zeuz-provisioning.service 2>/dev/null || true
 systemctl enable zeuz-dnc-qt.service
 systemctl enable zeuz-dnc-api.service
 systemctl enable zeuz-update-check.service
+systemctl enable zeuz-update-recover.service
 systemctl set-default multi-user.target
 
 echo "==> Limpiando el aprovisionamiento"

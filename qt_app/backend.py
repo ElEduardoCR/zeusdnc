@@ -15,7 +15,9 @@ from zeuz_core.pair_agent import pair, write_local_runtime, write_runtime
 from zeuz_core.network import WifiManager
 from zeuz_core.programs import AgentProgramRepository
 from zeuz_core.settings import DEFAULT_SETTINGS_PATH, RuntimeSettings
-from zeuz_core.updater import prepare_update, read_update_state, safe_check_for_update
+from zeuz_core.updater import read_update_state
+from zeuz_core.remote_updates import UpdateManager
+import uuid
 from zeuz_core.version import installed_version
 from qt_app.gcode_edit import add_line_numbers, remove_line_numbers, replace_all
 from qt_app.highlighter import GCodeSyntaxHighlighter
@@ -53,6 +55,7 @@ class AppBackend(QObject):
         self._wifi = WifiManager()
         self._wifi_networks: list[dict] = []
         self._wifi_status = {"connected": False, "ssid": "", "ip": "", "interface": "wlan0"}
+        self._updates = UpdateManager()
         self._update_state = read_update_state()
         self._status = "Cargando programas…"
         self._busy = False
@@ -260,6 +263,17 @@ class AppBackend(QObject):
     def autoRefreshPrograms(self) -> None:
         if self._program_refresh_in_flight or self._busy:
             return
+        latest = load_machines()
+        if latest != self._machines:
+            self._machines = latest
+            self.machinesChanged.emit()
+            self.selectionChanged.emit()
+        # A server chosen in Agent takes effect without restarting the touch UI.
+        from zeuz_core.workshop import settings as workshop_settings
+        source = workshop_settings().get("program_server")
+        if source != getattr(self, "_workshop_source", None):
+            self._workshop_source = source
+            self._repository = RuntimeSettings.load().repository()
         path = self._path
         repository = self._repository
         self._program_refresh_in_flight = True
@@ -496,28 +510,18 @@ class AppBackend(QObject):
             else:
                 self._set_status("El sistema está actualizado", False)
 
-        self._submit(safe_check_for_update, checked, "Buscando actualizaciones…")
+        self._submit(self._updates.check, checked, "Buscando actualizaciones…")
 
     @Slot()
     def installUpdate(self) -> None:
         def install() -> object:
-            update = prepare_update()
-            result = subprocess.run(
-                ["sudo", "-n", "/usr/bin/systemctl", "start", "zeuz-update-apply.service"],
-                text=True,
-                capture_output=True,
-                timeout=180,
-                check=False,
-            )
-            if result.returncode != 0:
-                detail = (result.stderr or result.stdout or "No se pudo iniciar la actualización")
-                raise RuntimeError(detail.strip()[:300])
-            return update
+            value = read_update_state()
+            return self._updates.install(value.get("latest_revision"), str(uuid.uuid4()))
 
-        def installed(_value: object) -> None:
-            self._set_status("Actualización instalada; reiniciando interfaz…", False)
+        def queued(_value: object) -> None:
+            self._set_status("Actualización solicitada; se instalará cuando termine el envío", False)
 
-        self._submit(install, installed, "Descargando e instalando actualización…")
+        self._submit(install, queued, "Preparando actualización…")
 
     @Slot(str)
     def selectMachine(self, machine_id: str) -> None:
@@ -538,7 +542,7 @@ class AppBackend(QObject):
         state.select_machine(machine["id"])
         self.machinesChanged.emit()
         self.selectionChanged.emit()
-        self._set_status(f"Máquina {machine['name']} guardada")
+        self._set_status(f"Máquina {machine['name']} guardada en este equipo · Agent la recibirá al conectar")
         return True
 
     @Slot(str, result=bool)

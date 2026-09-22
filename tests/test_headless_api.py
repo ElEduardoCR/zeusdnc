@@ -83,5 +83,21 @@ class HeadlessControllerTests(unittest.TestCase):
             self.assertEqual(profile["baudrate"], 9600)
 
 
+class DeviceIdentityTests(unittest.TestCase):
+    def test_board_serial_is_used_before_clonable_machine_id(self):
+        from zeuz_core.headless_api import device_identity
+        with patch("zeuz_core.headless_api.Path.read_text", return_value="board-A\x00") as read:
+            first = device_identity()
+            self.assertEqual(first, device_identity())
+            self.assertEqual(read.call_count, 2)
+        with patch("zeuz_core.headless_api.Path.read_text", return_value="board-B\x00"):
+            self.assertNotEqual(first, device_identity())
+
+    def test_no_identity_is_invented_if_ids_are_unavailable(self):
+        from zeuz_core.headless_api import device_identity
+        with patch("zeuz_core.headless_api.Path.read_text", side_effect=FileNotFoundError):
+            self.assertIsNone(device_identity())
+
+
 if __name__ == "__main__":
     unittest.main()

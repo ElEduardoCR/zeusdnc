@@ -1,0 +1,15 @@
+[Unit]
+Description=Recuperar una actualización interrumpida de Zeuz DNC
+After=local-fs.target
+Before=zeuz-dnc-api.service zeuz-dnc-qt.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/zeuz/update_runner.py --recover
+RemainAfterExit=yes
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target

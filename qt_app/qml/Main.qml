@@ -88,25 +88,14 @@ ApplicationWindow {
             Layout.preferredHeight: 58
             spacing: 14
 
-            Text {
-                text: "ZEUZ"
-                color: textMain
-                font.pixelSize: 28
-                font.weight: Font.Black
-                font.letterSpacing: 2
-            }
-
-            Rectangle {
-                Layout.preferredWidth: 1
-                Layout.preferredHeight: 28
-                color: line
-            }
-
-            Text {
-                text: "DNC"
-                color: textMuted
-                font.pixelSize: 18
-                font.weight: Font.Medium
+            Image {
+                source: "brand/dnc-dark.svg"
+                Layout.preferredWidth: 215
+                Layout.preferredHeight: 52
+                fillMode: Image.PreserveAspectFit
+                horizontalAlignment: Image.AlignLeft
+                Accessible.name: "ZEUZ DNC"
+                Accessible.role: Accessible.StaticText
             }
 
             Item { Layout.fillWidth: true }
@@ -980,6 +969,7 @@ ApplicationWindow {
         title: editingId ? "Editar máquina" : "Nueva máquina"
         closePolicy: Popup.CloseOnEscape
         property string editingId: ""
+        property var editingRevision: 0
 
         function choose(combo, value) {
             for (var index = 0; index < combo.count; ++index) {
@@ -992,6 +982,7 @@ ApplicationWindow {
         }
 
         function openFor(machine) {
+            editingRevision = machine && machine.revision ? machine.revision : 0
             editingId = machine ? machine.id : ""
             machineName.text = machine ? machine.name : ""
             choose(machineBaud, machine ? machine.baudrate : 9600)
@@ -1099,6 +1090,7 @@ ApplicationWindow {
                     onClicked: {
                         var ok = backend.saveMachine({
                             "id": machineEditor.editingId,
+                            "revision": machineEditor.editingRevision,
                             "name": machineName.text,
                             "baudrate": parseInt(machineBaud.currentText),
                             "bytesize": parseInt(machineBytes.currentText),

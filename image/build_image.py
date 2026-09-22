@@ -8,6 +8,8 @@ import os
 import re
 import shutil
 import struct
+import subprocess
+import io
 import tarfile
 import tempfile
 import time
@@ -52,13 +54,14 @@ PAYLOAD_FILES = (
     "system_info.py",
     "usb_monitor.py",
 )
-PAYLOAD_DIRS = ("config", "qt_app", "zeuz_core")
+PAYLOAD_DIRS = ("config", "qt_app", "zeuz_core", "zeuz_provisioning", "systemd", "packaging")
 
 SYSTEMD_FILES = (
     "zeuz-dnc-qt.service",
     "zeuz-dnc-api.service",
     "zeuz-update-check.service",
     "zeuz-update-apply.service",
+    "zeuz-update-recover.service",
 )
 
 
@@ -265,6 +268,12 @@ def prepare_debs() -> tuple[list[Package], str]:
 
 def create_payload(destination: Path) -> None:
     with tarfile.open(destination, "w:gz", compresslevel=9) as archive:
+        revision = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
+        revision_bytes = (revision + "\n").encode("ascii")
+        revision_entry = tarfile.TarInfo("zeusdnc/REVISION")
+        revision_entry.size = len(revision_bytes)
+        revision_entry.mode = 0o644
+        archive.addfile(revision_entry, io.BytesIO(revision_bytes))
         for name in PAYLOAD_FILES:
             archive.add(ROOT / name, arcname=f"zeusdnc/{name}")
         for name in PAYLOAD_DIRS:
@@ -272,7 +281,7 @@ def create_payload(destination: Path) -> None:
             for path in sorted(base.rglob("*")):
                 if path.is_dir() or "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}:
                     continue
-                if path.name == "runtime.json":
+                if path.name in {"runtime.json", ".DS_Store"}:
                     continue
                 archive.add(path, arcname=f"zeusdnc/{path.relative_to(ROOT).as_posix()}")
 
@@ -319,6 +328,8 @@ def inject_image(
     manifest = {
         "product": "Zeuz DNC",
         "version": VERSION,
+        "source_revision": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+        "payload_sha256": sha256(payload),
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "base_image": BASE_NAME,
         "base_sha256": BASE_SHA256,
@@ -410,6 +421,23 @@ def validate_image(image: Path) -> dict:
         if "apt-get" in firstboot:
             raise RuntimeError("firstrun.sh todavía usa la adquisición de apt")
         manifest = json.loads(fs.readtext("zeuz/manifest.json"))
+        payload_bytes = fs.readbytes("zeuz/zeusdnc.tar.gz")
+        if hashlib.sha256(payload_bytes).hexdigest() != manifest["payload_sha256"]:
+            raise RuntimeError("El checksum del código ZEUZ no coincide")
+        with tarfile.open(fileobj=io.BytesIO(payload_bytes), mode="r:gz") as payload_archive:
+            names = set(payload_archive.getnames())
+            required_payload = {
+                "zeusdnc/REVISION",
+                "zeusdnc/packaging/update_runner.py",
+                "zeusdnc/packaging/49-zeuz-updates.rules",
+                "zeusdnc/zeuz_core/deployment.py",
+                *(f"zeusdnc/systemd/{name}" for name in SYSTEMD_FILES),
+            }
+            if not required_payload.issubset(names):
+                raise RuntimeError("Faltan componentes de actualización en el paquete ZEUZ")
+            revision_file = payload_archive.extractfile("zeusdnc/REVISION")
+            if revision_file is None or revision_file.read().decode().strip() != manifest["source_revision"]:
+                raise RuntimeError("La revisión del código no coincide con el manifiesto")
         debs = [path for path in fs.walk.files(filter=["*.deb"])]
         if not debs:
             raise RuntimeError("La imagen no contiene paquetes ARM64")
