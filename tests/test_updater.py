@@ -16,6 +16,26 @@ from zeuz_core.updater import (
 
 
 class UpdaterTests(unittest.TestCase):
+    def test_newer_local_repair_is_current_without_false_error_or_downgrade(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            version, revision, state = root / "version", root / "revision", root / "state.json"
+            version.write_text("0.7.2\n")
+            revision.write_text("a" * 40 + "\n")
+            state.write_text(json.dumps({"phase": "failed", "error": "certificate is not yet valid"}))
+            result = check_for_update(
+                state_path=state, version_path=version, revision_path=revision,
+                fetch_json=lambda _url: {"sha": "b" * 40},
+                fetch_text=lambda _url: "0.7.0\n",
+            )
+            self.assertFalse(result["available"])
+            self.assertEqual(result["phase"], "idle")
+            self.assertEqual(result["error"], "")
+            self.assertEqual(result["current_version"], "0.7.2")
+            self.assertEqual(result["latest_version"], "0.7.0")
+            self.assertEqual(version.read_text(), "0.7.2\n")
+            self.assertEqual(json.loads(state.read_text())["error"], "")
+
     def test_check_detects_new_commit_at_same_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

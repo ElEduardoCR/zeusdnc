@@ -77,7 +77,7 @@ def dispatch(handler, method):
                         raise ValueError("Máquina no encontrada")
                     body = {**body, "machine": machine}
                 result = workshop_routes.request(route, method, remote_path, body if method == "POST" else None)
-                if isinstance(result, dict) and result.get("machine"):
+                if isinstance(result, dict) and isinstance(result.get("machine"), dict):
                     result["machine"]["id"] = machine_id
                 return result
     if path == "/v1/dnc/machine/save" and method == "POST":

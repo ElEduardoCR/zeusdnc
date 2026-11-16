@@ -1,8 +1,8 @@
 [Unit]
-After=zeuz-update-recover.service
 Requires=zeuz-update-recover.service
-Description=Zeuz DNC headless API
-After=NetworkManager.service
+After=zeuz-update-recover.service
+Description=API headless de Zeuz DNC
+After=NetworkManager.service zeuz-identity.service
 Wants=NetworkManager.service
 
 [Service]
@@ -15,9 +15,12 @@ Environment=ZEUZ_CONFIG_PATH=/var/lib/zeuz/runtime.json
 Environment=ZEUZ_MACHINES_PATH=/var/lib/zeuz/machines.json
 ExecStart=/usr/bin/python3 -m zeuz_core.headless_api
 Restart=always
-RestartSec=2
+RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zeuz
 
 [Install]
 WantedBy=multi-user.target

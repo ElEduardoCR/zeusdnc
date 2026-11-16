@@ -15,7 +15,7 @@ from machines import delete_machine, get_machine, load_machines, save_machine, v
 from state import state
 from zeuz_core.pair_agent import pair, write_runtime
 from zeuz_core.settings import DEFAULT_SETTINGS_PATH, RuntimeSettings
-from zeuz_core import workshop, update_auth, remote_updates
+from zeuz_core import workshop, update_auth, remote_updates, system_management
 from zeuz_core.updater import read_update_state
 from zeuz_core.version import installed_version
 
@@ -48,7 +48,7 @@ class HeadlessController:
             "name": workshop.settings().get("name", os.uname().nodename),
             "version": installed_version(),
             "api": 1,
-            "capabilities": {"remote_update": 1},
+            "capabilities": {"remote_update": 1, "clock_sync": 1, "transfer_diagnostics": 1},
             "update_paired": bool(update_auth.paired_token()),
             "update": {k: v for k, v in read_update_state().items() if k in {"available", "current_version", "latest_version", "phase", "error"}},
             "agent_configured": settings.source_type == "agent" and bool(settings.agent_token),
@@ -139,6 +139,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith("/api/system/"):
+            self._system("GET")
+            return
         if path.startswith("/api/update/"):
             self._update("GET")
             return
@@ -161,6 +164,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if path.startswith("/api/system/"):
+            self._system("POST")
+            return
         if path.startswith("/api/update/"):
             self._update("POST")
             return
@@ -213,6 +219,19 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", HTTPStatus.BAD_REQUEST))
         except Exception as exc:
             self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+
+    def _system(self, method):
+        if not update_auth.authorized(self.headers.get("Authorization", "")):
+            self._json({"ok": False, "error": "Se requiere el Agent vinculado para administrar el sistema"}, 401)
+            return
+        try:
+            if method == "POST" and int(self.headers.get("Content-Length", "0")) > 2048:
+                raise ValueError("Solicitud de sistema demasiado grande")
+            result = system_management.dispatch(method, urlsplit(self.path).path,
+                                                self._body() if method == "POST" else None)
+            self._json(result)
+        except Exception as exc:
+            self._json({"ok": False, "error": str(exc)}, getattr(exc, "status", 400))
 
     def _update(self, method):
         if not update_auth.authorized(self.headers.get("Authorization", "")):
@@ -279,6 +298,8 @@ class Server(ThreadingHTTPServer):
 
 
 def main() -> None:
+    from zeuz_core.transfer_diagnostics import configure_transfer_diagnostics
+    configure_transfer_diagnostics()
     usb_monitor.start_usb_monitor()
     server = Server(("0.0.0.0", 5000), HeadlessController())
     server.updates.start()

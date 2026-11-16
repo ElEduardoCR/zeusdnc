@@ -50,11 +50,13 @@ class UpdateManager:
 
     def check(self):
         previous = u.read_update_state()
-        return self._launch(lambda: self._check(previous), "checking")
+        return self._launch(lambda: self._check(previous), "checking", request_id=None, failure_stage="")
 
     def _check(self, previous):
         result = u.check_for_update(state_path=u.STATE_PATH, version_path=u.VERSION_PATH, revision_path=u.REVISION_PATH)
-        if previous.get("latest_revision") == result.get("latest_revision") and previous.get("phase") in {"failed", "rolled_back"}:
+        if (previous.get("latest_revision") == result.get("latest_revision")
+                and previous.get("phase") in {"failed", "rolled_back"}
+                and previous.get("request_id") and previous.get("failure_stage") != "checking"):
             result.update(phase=previous["phase"], error=previous.get("error", ""), request_id=previous.get("request_id"))
             u._write_state(u.STATE_PATH, result)
 
@@ -83,7 +85,7 @@ class UpdateManager:
             self._write(phase, error="", progress=0, **fields)
             def run():
                 try: work()
-                except Exception as exc: self._write("failed", error=str(exc)[:500])
+                except Exception as exc: self._write("failed", error=u.update_error(exc), failure_stage=phase)
                 finally:
                     fcntl.flock(handle, fcntl.LOCK_UN)
                     handle.close()

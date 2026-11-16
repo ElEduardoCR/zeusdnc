@@ -1,0 +1,16 @@
+[Unit]
+Description=Sincronizar reloj Zeuz desde el Agent vinculado
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/zeuz/clock_runner.py
+TimeoutStartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zeuz-clock /var/lib/zeuz/operation.lock /etc/fake-hwclock.data /var/lib/systemd/timesync
+CapabilityBoundingSet=CAP_SYS_TIME CAP_DAC_OVERRIDE CAP_FOWNER
+RestrictAddressFamilies=AF_UNIX

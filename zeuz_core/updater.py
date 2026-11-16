@@ -79,7 +79,7 @@ def read_update_state(path: Path | None = None) -> dict:
     except (OSError, json.JSONDecodeError):
         value = {}
     return {
-        **{key: value.get(key) for key in ("phase", "progress", "request_id", "started_at", "completed_at", "archive_sha256", "archive_size", "downloaded_bytes", "installed_at") if key in value},
+        **{key: value.get(key) for key in ("phase", "progress", "request_id", "started_at", "completed_at", "archive_sha256", "archive_size", "downloaded_bytes", "installed_at", "failure_stage") if key in value},
         "available": bool(value.get("available", False)),
         "current_version": str(value.get("current_version", installed_version())),
         "current_revision": str(value.get("current_revision", "")),
@@ -115,6 +115,13 @@ def _fetch_text(url: str) -> str:
         return response.read(4096).decode("utf-8").strip()
 
 
+def update_error(exc):
+    detail = str(exc)
+    if "CERTIFICATE_VERIFY_FAILED" in detail and "not yet valid" in detail:
+        return "El reloj de Zeuz está atrasado y no permite verificar la actualización. Sincroniza la hora desde el Agent vinculado y vuelve a comprobar."
+    return detail[:500]
+
+
 def check_for_update(
     *,
     state_path: Path = STATE_PATH,
@@ -145,7 +152,9 @@ def check_for_update(
         "latest_revision": revision,
         "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "downloaded": False,
-        "error": "" if latest_key >= current_key else "GitHub contiene una versión anterior",
+        # A newer local repair is already current. Successfully checking an
+        # older published version must neither downgrade it nor show a failure.
+        "error": "",
     }
     if latest_key < current_key:
         state["available"] = False
@@ -164,7 +173,7 @@ def safe_check_for_update(**kwargs) -> dict:
         previous = read_update_state(state_path)
         previous.update(
             checked_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            error=str(exc)[:300],
+            error=update_error(exc), phase="failed", failure_stage="checking", request_id=None,
         )
         return _write_state(state_path, previous)
 
