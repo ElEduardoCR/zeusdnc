@@ -231,20 +231,67 @@ def _validated_members(archive: tarfile.TarFile) -> tuple[list[tarfile.TarInfo],
     if not members:
         raise RuntimeError("La actualización está vacía")
     roots: set[str] = set()
+    paths: dict[PurePosixPath, tarfile.TarInfo] = {}
     total = 0
     for member in members:
         path = PurePosixPath(member.name)
-        if path.is_absolute() or ".." in path.parts or not path.parts:
+        if path.is_absolute() or ".." in path.parts or not path.parts or "\x00" in member.name:
             raise RuntimeError("La actualización contiene una ruta insegura")
-        if member.issym() or member.islnk() or member.isdev():
-            raise RuntimeError("La actualización contiene enlaces o dispositivos no permitidos")
+        if member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE) or member.sparse is not None:
+            raise RuntimeError("La actualización contiene un tipo de archivo no permitido")
+        if member.size < 0 or (member.isdir() and member.size != 0):
+            raise RuntimeError("La actualización contiene un tamaño de archivo inválido")
+        if path in paths:
+            raise RuntimeError("La actualización contiene rutas duplicadas o en conflicto")
+        paths[path] = member
         roots.add(path.parts[0])
-        total += max(0, member.size)
+        total += member.size
         if total > MAX_EXTRACTED_BYTES:
             raise RuntimeError("La actualización descomprimida supera el tamaño permitido")
     if len(roots) != 1:
         raise RuntimeError("La actualización no tiene una raíz única")
+    for path in paths:
+        for parent in path.parents:
+            if parent in paths and not paths[parent].isdir():
+                raise RuntimeError("La actualización contiene rutas duplicadas o en conflicto")
     return members, roots.pop()
+
+
+def _extract_archive(archive: tarfile.TarFile, destination: Path) -> str:
+    # The caller owns an empty, private mkdtemp directory. Validate the entire
+    # archive before writing; never restore archive links, ownership or modes.
+    members, root_name = _validated_members(archive)
+    if any(destination.iterdir()):
+        raise RuntimeError("El directorio temporal de actualización no está vacío")
+    directories: set[PurePosixPath] = set()
+    for member in members:
+        path = PurePosixPath(member.name)
+        directories.update(parent for parent in path.parents if parent.parts)
+        if member.isdir():
+            directories.add(path)
+    for path in sorted(directories, key=lambda value: (len(value.parts), str(value))):
+        target = destination.joinpath(*path.parts)
+        target.mkdir(mode=0o755)
+        target.chmod(0o755)
+    for member in members:
+        if member.isdir():
+            continue
+        target = destination.joinpath(*PurePosixPath(member.name).parts)
+        source = archive.extractfile(member)
+        if source is None:
+            raise RuntimeError("No se pudo leer un archivo de la actualización")
+        with source:
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                remaining = member.size
+                while remaining:
+                    block = source.read(min(1024 * 1024, remaining))
+                    if not block:
+                        raise RuntimeError("La actualización contiene un archivo truncado")
+                    output.write(block)
+                    remaining -= len(block)
+                os.fchmod(output.fileno(), 0o755 if member.mode & 0o100 else 0o644)
+    return root_name
 
 
 def _set_zeuz_owner(path: Path) -> None:
@@ -290,8 +337,7 @@ def apply_downloaded_update(
     installed_new = False
     try:
         with tarfile.open(archive_path, "r:gz") as archive:
-            members, root_name = _validated_members(archive)
-            archive.extractall(temporary_root, members=members, filter="data")
+            root_name = _extract_archive(archive, temporary_root)
         source = temporary_root / root_name
         required = ("VERSION", "qt_app", "zeuz_core", "machines.py", "systemd")
         missing = [name for name in required if not (source / name).exists()]

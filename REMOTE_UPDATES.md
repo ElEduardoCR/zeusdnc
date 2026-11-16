@@ -42,6 +42,24 @@ Las imágenes deben instalar `polkitd`, la regla `packaging/49-zeuz-updates.rule
 
 La validación física de polkit/systemd, corte de energía y reinstalación inicial sigue correspondiendo a una Pi de prueba con la imagen final. La compilación y las pruebas locales no sustituyen esa validación en hardware.
 
+## Compatibilidad del instalador con Python de la imagen
+
+Algunas imágenes incluyen una versión de `tarfile` sin el parámetro `filter`
+de `TarFile.extractall`. El instalador anterior falla con
+`TarFile.extractall() got an unexpected keyword argument 'filter'` y restaura
+la versión anterior. La extracción corregida admite únicamente archivos
+regulares y directorios validados, con permisos controlados, sin depender de
+ese parámetro ni restaurar propietarios del archivo descargado.
+
+Si el instalador que ya está en el equipo tiene este defecto, publicar un
+archivo corregido no basta: la llamada incompatible ocurre antes de cargar
+el código nuevo. Es necesario reparar una vez
+`/opt/zeuz/zeusdnc/zeuz_core/updater.py` mediante acceso administrativo existente
+o una copia fresca y respaldada de la SD. Se conservan versión, revisión,
+perfiles, programas y credenciales; después se comprueba e instala por OTA una
+revisión oficial que también incluya la corrección, para no reintroducir el
+defecto. No basta con reiniciar o repetir la instalación fallida.
+
 ## Reparación local Orange 0.7.2: reloj y diagnóstico
 
 Esta copia conserva la base `641297a9a71be726c7feb47d25ec6090f30bd106` y no implica
