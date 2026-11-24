@@ -140,6 +140,28 @@ class HeadlessControllerTests(unittest.TestCase):
             self.assertFalse(rejected.exists(), "The rejected request removes only its own copy")
 
 
+class IdleConnectionTests(unittest.TestCase):
+    def test_silent_client_does_not_hold_a_server_thread(self) -> None:
+        import socket
+        import threading
+        import time
+        from zeuz_core.headless_api import Handler, Server
+
+        with patch.object(Handler, "timeout", 0.3):
+            server = Server(("127.0.0.1", 0), HeadlessController())
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                # Connects and never sends a request, like a phone that slept.
+                with socket.create_connection(server.server_address, timeout=5) as client:
+                    started = time.monotonic()
+                    self.assertEqual(client.recv(1), b"")
+                    self.assertLess(time.monotonic() - started, 3)
+            finally:
+                server.shutdown()
+                server.server_close()
+
+
 class DeviceIdentityTests(unittest.TestCase):
     def test_board_serial_is_used_before_clonable_machine_id(self):
         from zeuz_core.headless_api import device_identity

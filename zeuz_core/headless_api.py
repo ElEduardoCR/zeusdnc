@@ -127,6 +127,9 @@ class Conflict(Exception):
 
 class Handler(BaseHTTPRequestHandler):
     server_version = f"ZeuzDNC/{installed_version()}"
+    # A client that sleeps or leaves the Wi-Fi mid-request leaves a half-open
+    # connection; without a limit it held one server thread forever.
+    timeout = 60
 
     @property
     def controller(self) -> HeadlessController:
