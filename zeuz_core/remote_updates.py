@@ -16,6 +16,11 @@ from .operation_guard import transfer_active, Busy
 POLICY_PATH = Path(os.environ.get("ZEUZ_UPDATE_POLICY", "/var/lib/zeuz/update-policy.json"))
 JOB_LOCK = Path(os.environ.get("ZEUZ_UPDATE_JOB_LOCK", "/var/lib/zeuz/update-job.lock"))
 BUSY_PHASES = {"checking", "downloading", "waiting_idle", "installing", "restarting"}
+# Seconds to wait for the root installer to report its first phase. On an
+# Orange Pi, starting the unit (Python start-up and its network dependency)
+# can take more than a minute; giving up after 30 s reported a failure while
+# the installation went on and finished.
+INSTALLER_START_SECONDS = 300
 
 
 def read_policy():
@@ -114,10 +119,12 @@ class UpdateManager:
             if transfer_active():
                 if self.stop_event.wait(1): return
                 continue
+            # Written before the start: the installer overwrites it as soon as it runs.
+            self._write("waiting_idle", error="Iniciando el instalador…")
             subprocess.run(["/usr/bin/systemctl", "--no-block", "start", "zeuz-update-apply.service"],
                            check=True, capture_output=True, text=True, timeout=15)
             # The root service writes durable phases, then restarts this API.
-            for _ in range(30):
+            for _ in range(INSTALLER_START_SECONDS):
                 if self.stop_event.wait(1): return
                 phase = u.read_update_state().get("phase")
                 if phase in {"installing", "restarting", "succeeded", "rolled_back", "failed"}: return

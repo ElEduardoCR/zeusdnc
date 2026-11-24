@@ -195,6 +195,38 @@ class RemoteAPITests(UpdateFixture):
             download.assert_called_once(); service.assert_called_once()
             self.assertEqual(u.read_update_state()['phase'], 'installing')
 
+    def _install_with_installer_reporting_after(self, reads_before_report):
+        # Each loop step stands for one second; the fake installer writes its
+        # first phase only after the given number of state reads (None: never).
+        u._write_state(u.STATE_PATH, self.value)
+        manager = remote.UpdateManager()
+        real_read = u.read_update_state
+        reads, messages = {'count': 0}, []
+        def read_state(*args, **kwargs):
+            reads['count'] += 1
+            value = real_read(*args, **kwargs)
+            if reads_before_report is not None and reads['count'] > reads_before_report:
+                value['phase'] = 'installing'
+            return value
+        def start(*args, **kwargs):
+            messages.append(real_read().get('error'))
+        def downloaded(value, **kwargs):
+            return u._write_state(u.STATE_PATH, {**value, 'downloaded': True})
+        with patch.object(u, 'download_update', side_effect=downloaded), \
+             patch.object(u, 'read_update_state', side_effect=read_state), \
+             patch.object(remote.subprocess, 'run', side_effect=start), \
+             patch.object(manager.stop_event, 'wait', return_value=False):
+            manager._install('b'*40)
+        return messages
+
+    def test_installer_that_takes_minutes_to_start_is_not_a_failure(self):
+        messages = self._install_with_installer_reporting_after(120)
+        self.assertEqual(messages, ['Iniciando el instalador…'])
+
+    def test_installer_that_never_starts_is_still_reported(self):
+        with self.assertRaisesRegex(RuntimeError, 'no confirmó el inicio'):
+            self._install_with_installer_reporting_after(None)
+
     def test_management_pairing_preserves_program_source(self):
         from zeuz_core import headless_api
         before = json.loads(update_auth.DEFAULT_SETTINGS_PATH.read_text())['program_source']
