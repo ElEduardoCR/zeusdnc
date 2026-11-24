@@ -578,7 +578,7 @@ class AppBackend(QObject):
             send_path = Path(value)
             if isinstance(self._repository, AgentProgramRepository):
                 self._temporary_send_file = send_path
-            state.reset_transfer()
+            # start_transfer resets the status only after it owns the port.
             ok, error = serial_transfer.start_transfer(
                 snap["active_device"],
                 profile,

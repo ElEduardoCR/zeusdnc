@@ -183,6 +183,14 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
         _transfer_lock.release()
         return False, str(exc)
     _cancel_event.clear()
+    # Solo quien ya tiene el puerto reemplaza el estado visible. Un segundo
+    # "Enviar" rechazado ya no borra el progreso del envío en curso, y los
+    # clientes ven "sending" desde la respuesta, no un "idle" o el resultado
+    # del envío anterior mientras se prepara el archivo.
+    state.reset_transfer()
+    state.update_transfer(status="sending", filename=display_name,
+                          machine=machine_profile.get("name", machine_profile.get("id")),
+                          message="Preparando el envío…")
     def guarded_transfer():
         try:
             _run_transfer(device_path, machine_profile, filepath, display_name)
@@ -194,6 +202,7 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
     except Exception:
         lease.close()
         _transfer_lock.release()
+        state.update_transfer(status="error", message="No se pudo iniciar el envío")
         raise
     return True, None
 

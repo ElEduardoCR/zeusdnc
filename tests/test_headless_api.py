@@ -82,6 +82,40 @@ class HeadlessControllerTests(unittest.TestCase):
             self.assertEqual(profile["name"], "Torno Mori 1")
             self.assertEqual(profile["baudrate"], 9600)
 
+    def test_rejected_send_keeps_status_and_file_of_running_transfer(self) -> None:
+        from zeuz_core.headless_api import Conflict
+
+        with tempfile.TemporaryDirectory() as directory:
+            rejected = Path(directory) / "zeuz-send-segundo.nc"
+            rejected.write_text("O3\nM30\n", encoding="ascii")
+            running = {"status": "sending", "filename": "1001.nc", "bytes_sent": 4096,
+                       "total_bytes": 91804, "percent": 4}
+
+            def materialize(path):
+                # Another send won the port while this request read its program.
+                state.update_transfer(**running)
+                return rejected
+
+            repository = Mock()
+            repository.materialize.side_effect = materialize
+            settings = Mock()
+            settings.repository.return_value = repository
+            state.on_usb_add("/dev/ttyUSB4", "Adaptador")
+            supplied = {"id": "fadal", "name": "FADAL", "baudrate": 19200, "bytesize": 7, "parity": "E",
+                        "stopbits": 1, "flow_control": "xonxoff", "line_terminator": "CRLF"}
+            with patch("zeuz_core.headless_api.RuntimeSettings.load", return_value=settings), patch(
+                "zeuz_core.headless_api.serial_transfer.start_transfer",
+                return_value=(False, "Ya hay una transferencia en curso"),
+            ):
+                with self.assertRaises(Conflict):
+                    HeadlessController().send("O3.nc", supplied)
+
+            transfer = state.snapshot()["transfer"]
+            self.assertEqual(transfer["status"], "sending")
+            self.assertEqual(transfer["filename"], "1001.nc")
+            self.assertEqual(transfer["bytes_sent"], 4096)
+            self.assertFalse(rejected.exists(), "The rejected request removes only its own copy")
+
 
 class DeviceIdentityTests(unittest.TestCase):
     def test_board_serial_is_used_before_clonable_machine_id(self):

@@ -33,10 +33,6 @@ def device_identity() -> str | None:
 
 
 class HeadlessController:
-    def __init__(self) -> None:
-        self._temporary_file: Path | None = None
-        self._cleanup_lock = threading.Lock()
-
     @staticmethod
     def info() -> dict:
         settings = RuntimeSettings.load()
@@ -95,27 +91,28 @@ class HeadlessController:
             raise ValueError("Perfil de máquina no encontrado")
         repository = RuntimeSettings.load().repository()
         materialized = repository.materialize(str(path or ""))
-        self._temporary_file = materialized if materialized.name.startswith("zeuz-send-") else None
-        state.reset_transfer()
+        temporary = materialized if materialized.name.startswith("zeuz-send-") else None
+        # start_transfer replaces the visible status only once it owns the port,
+        # so a rejected second send keeps the running transfer's progress.
         ok, error = serial_transfer.start_transfer(
             snap["active_device"], profile, str(materialized), Path(path).name
         )
         if not ok:
-            self._discard_temporary()
+            self._discard_temporary(temporary)
             raise Conflict(error or "No se pudo iniciar el envío")
-        threading.Thread(target=self._cleanup_after_transfer, daemon=True).start()
+        threading.Thread(target=self._cleanup_after_transfer, args=(temporary,), daemon=True).start()
 
-    def _cleanup_after_transfer(self) -> None:
+    def _cleanup_after_transfer(self, temporary: Path | None) -> None:
         import time
 
         while state.snapshot()["transfer"]["status"] in {"idle", "sending"}:
             time.sleep(0.5)
-        self._discard_temporary()
+        self._discard_temporary(temporary)
 
-    def _discard_temporary(self) -> None:
-        with self._cleanup_lock:
-            temporary = self._temporary_file
-            self._temporary_file = None
+    @staticmethod
+    def _discard_temporary(temporary: Path | None) -> None:
+        # Each request removes only its own copy: a rejected send must not
+        # delete or replace the file that the running transfer still reads.
         if temporary:
             try:
                 temporary.unlink(missing_ok=True)
