@@ -70,7 +70,7 @@ class HeadlessController:
             RuntimeSettings.load().repository().list("")
         return {"ok": True, "agent_name": result.get("agent_name", "Zeuz Agent")}
 
-    def send(self, path: str, supplied_profile: dict | None = None) -> None:
+    def send(self, path: str, supplied_profile: dict | None = None) -> str | None:
         snap = state.snapshot()
         if not snap["usb_devices"]:
             raise Conflict("Cable RS232 no conectado")
@@ -101,6 +101,7 @@ class HeadlessController:
             self._discard_temporary(temporary)
             raise Conflict(error or "No se pudo iniciar el envío")
         threading.Thread(target=self._cleanup_after_transfer, args=(temporary,), daemon=True).start()
+        return state.snapshot()["transfer"].get("transfer_id")
 
     def _cleanup_after_transfer(self, temporary: Path | None) -> None:
         import time
@@ -199,8 +200,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(error or "Máquina no encontrada")
                 result = {"ok": True}
             elif path == "/api/send":
-                self.controller.send(body.get("path", ""), body.get("machine"))
-                result = {"ok": True}
+                transfer_id = self.controller.send(body.get("path", ""), body.get("machine"))
+                result = {"ok": True, **({"transfer_id": transfer_id} if transfer_id else {})}
             elif path == "/api/send/cancel":
                 serial_transfer.request_cancel()
                 result = {"ok": True}

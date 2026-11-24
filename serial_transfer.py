@@ -187,13 +187,17 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
     # "Enviar" rechazado ya no borra el progreso del envío en curso, y los
     # clientes ven "sending" desde la respuesta, no un "idle" o el resultado
     # del envío anterior mientras se prepara el archivo.
+    # Cada envío lleva su número: los clientes siguen ESTE envío y no adivinan
+    # por el nombre del archivo. El diagnóstico serial usa el mismo número.
+    transfer_id = uuid.uuid4().hex
     state.reset_transfer()
     state.update_transfer(status="sending", filename=display_name,
                           machine=machine_profile.get("name", machine_profile.get("id")),
-                          message="Preparando el envío…")
+                          message="Preparando el envío…", transfer_id=transfer_id,
+                          started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     def guarded_transfer():
         try:
-            _run_transfer(device_path, machine_profile, filepath, display_name)
+            _run_transfer(device_path, machine_profile, filepath, display_name, transfer_id)
         finally:
             lease.close()
     thread = threading.Thread(target=guarded_transfer, daemon=True)
@@ -207,7 +211,7 @@ def start_transfer(device_path, machine_profile, filepath, display_name):
     return True, None
 
 
-def _run_transfer(device_path, profile, filepath, display_name):
+def _run_transfer(device_path, profile, filepath, display_name, transfer_id=None):
     global _current_ser
     machine_name = profile.get("name", profile.get("id"))
     phase = "prepare"
@@ -216,7 +220,7 @@ def _run_transfer(device_path, profile, filepath, display_name):
     started_at = time.monotonic()
     failure = None
     outcome = "error"
-    transfer_id = uuid.uuid4().hex
+    transfer_id = transfer_id or uuid.uuid4().hex
     _begin_observation(transfer_id, started_at)
     prepared_sha256 = None
     settings = {key: profile.get(key) for key in (

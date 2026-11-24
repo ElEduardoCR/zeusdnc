@@ -12,6 +12,8 @@ _EMPTY_TRANSFER = {
     "total_bytes": 0,
     "percent": 0,
     "message": "",
+    "transfer_id": None,    # número del envío; lo crea quien obtiene el puerto
+    "started_at": None,     # inicio UTC (ISO 8601)
 }
 
 

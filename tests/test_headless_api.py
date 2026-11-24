@@ -43,6 +43,29 @@ class HeadlessControllerTests(unittest.TestCase):
             repository.materialize.assert_called_once_with("carpeta/O1.nc")
             self.assertEqual(state.snapshot()["transfer"]["status"], "success")
 
+    def test_send_returns_the_number_of_the_started_transfer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            program = Path(directory) / "zeuz-send-numero.nc"
+            program.write_text("O4\nM30\n", encoding="ascii")
+            repository = Mock()
+            repository.materialize.return_value = program
+            settings = Mock()
+            settings.repository.return_value = repository
+            state.on_usb_add("/dev/ttyUSB4", "Adaptador")
+            supplied = {"id": "fadal", "name": "FADAL", "baudrate": 19200, "bytesize": 7, "parity": "E",
+                        "stopbits": 1, "flow_control": "xonxoff", "line_terminator": "CRLF"}
+
+            def start_transfer(device, profile, path, name):
+                state.update_transfer(status="sending", filename=name, transfer_id="a" * 32)
+                return True, None
+
+            with patch("zeuz_core.headless_api.RuntimeSettings.load", return_value=settings), patch(
+                "zeuz_core.headless_api.serial_transfer.start_transfer", side_effect=start_transfer
+            ):
+                number = HeadlessController().send("O4.nc", supplied)
+            self.assertEqual(number, "a" * 32)
+            state.update_transfer(status="success")
+
     def test_info_reports_agent_configuration(self) -> None:
         settings = Mock(source_type="agent", agent_token="token")
         with patch("zeuz_core.headless_api.RuntimeSettings.load", return_value=settings):

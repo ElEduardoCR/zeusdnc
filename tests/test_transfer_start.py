@@ -34,8 +34,8 @@ class StartTransferStatusTests(unittest.TestCase):
         release = threading.Event()
         seen = {}
 
-        def worker(device, profile, path, name):
-            seen.update(self.sender.state.snapshot()["transfer"])
+        def worker(device, profile, path, name, transfer_id):
+            seen.update(self.sender.state.snapshot()["transfer"], worker_id=transfer_id)
             release.wait(5)
 
         with patch.object(self.sender, "OperationLease", return_value=Lease()), \
@@ -49,10 +49,17 @@ class StartTransferStatusTests(unittest.TestCase):
         self.assertEqual(transfer["machine"], "FADAL")
         self.assertEqual((transfer["bytes_sent"], transfer["percent"]), (0, 0))
         self.assertEqual(transfer["message"], "Preparando el envío…")
+        # Each send has its own number, shared with the worker's diagnostics.
+        self.assertRegex(transfer["transfer_id"], r"^[0-9a-f]{32}$")
+        self.assertRegex(transfer["started_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+        self.assertEqual(seen.get("worker_id"), transfer["transfer_id"])
+        second = self.sender.state.snapshot()["transfer"]["transfer_id"]
+        self.assertEqual(second, transfer["transfer_id"])
 
     def test_rejected_second_send_keeps_running_progress(self):
         running = {"status": "sending", "filename": "1001.nc", "machine": "FADAL",
-                   "bytes_sent": 4096, "total_bytes": 91804, "percent": 4, "message": ""}
+                   "bytes_sent": 4096, "total_bytes": 91804, "percent": 4, "message": "",
+                   "transfer_id": "b" * 32, "started_at": "2026-11-24T20:00:00Z"}
         self.sender.state.update_transfer(**running)
         self.assertTrue(self.sender._transfer_lock.acquire(blocking=False))
         try:
